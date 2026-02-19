@@ -5,6 +5,7 @@ A lightweight **Node.js POC** that demonstrates:
 - Retrieval-Augmented Generation (RAG) over local docs/PDFs
 - MCP-style tool endpoints for retrieval and config generation
 - A simple CLI chatbot interface
+- Local npm-based lightweight embeddings by default (no external embedding model required)
 
 ## Project Structure
 
@@ -51,6 +52,15 @@ cp .env.example .env
 ```
 
 3. Update `.env` with your internal LLM API settings.
+
+### Embedding Mode
+
+By default this project uses a local lightweight embedding model implemented with npm packages (`natural` + hashing), so you can run retrieval even without embedding API access.
+
+- `EMBEDDING_PROVIDER=local` (default): local embeddings, no embedding API calls
+- `EMBEDDING_PROVIDER=api`: call `LLM_API_BASE /embeddings` using `LLM_EMBED_MODEL`
+
+You can tune `EMBEDDING_DIMENSIONS` (default `256`).
 
 ## Run
 

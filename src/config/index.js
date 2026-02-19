@@ -7,6 +7,8 @@ const config = {
   llmApiBase: process.env.LLM_API_BASE || 'https://your-internal-llm-api.com',
   llmApiKey: process.env.LLM_API_KEY || 'your-api-key',
   embedModel: process.env.LLM_EMBED_MODEL || 'text-embedding-model',
+  embeddingProvider: process.env.EMBEDDING_PROVIDER || 'local',
+  embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS || 256),
   chatModel: process.env.LLM_CHAT_MODEL || 'chat-completion-model',
   mcpPort: Number(process.env.MCP_PORT || 3001),
   topK: Number(process.env.TOP_K || 5),
