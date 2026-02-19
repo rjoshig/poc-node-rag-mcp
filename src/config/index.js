@@ -7,8 +7,9 @@ const config = {
   llmApiBase: process.env.LLM_API_BASE || 'https://your-internal-llm-api.com',
   llmApiKey: process.env.LLM_API_KEY || 'your-api-key',
   embedModel: process.env.LLM_EMBED_MODEL || 'text-embedding-model',
-  embeddingProvider: process.env.EMBEDDING_PROVIDER || 'local',
+  embeddingProvider: process.env.EMBEDDING_PROVIDER || 'natural', // natural | xenova | api
   embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS || 256),
+  xenovaModel: process.env.XENOVA_MODEL || 'Xenova/all-MiniLM-L6-v2',
   chatModel: process.env.LLM_CHAT_MODEL || 'chat-completion-model',
   mcpPort: Number(process.env.MCP_PORT || 3001),
   topK: Number(process.env.TOP_K || 5),

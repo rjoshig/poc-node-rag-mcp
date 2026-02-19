@@ -4,6 +4,7 @@ const natural = require('natural');
 const config = require('../config');
 
 const tokenizer = new natural.WordTokenizer();
+let featureExtractorPromise;
 
 const apiClient = axios.create({
   baseURL: config.llmApiBase,
@@ -30,9 +31,37 @@ function localEmbed(text, dimensions = 256) {
     vector[idx] += sign;
   }
 
-  // L2 normalize for cosine similarity quality.
   const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1;
   return vector.map((value) => value / magnitude);
+}
+
+async function getXenovaFeatureExtractor() {
+  if (!featureExtractorPromise) {
+    featureExtractorPromise = import('@xenova/transformers').then(({ pipeline }) => {
+      console.log(`Loading Xenova embedding model: ${config.xenovaModel}`);
+      return pipeline('feature-extraction', config.xenovaModel);
+    });
+  }
+  return featureExtractorPromise;
+}
+
+async function xenovaEmbed(text) {
+  const extractor = await getXenovaFeatureExtractor();
+  const output = await extractor(String(text || ''), {
+    pooling: 'mean',
+    normalize: true
+  });
+
+  return Array.from(output.data);
+}
+
+async function embedWithApi(texts, isBatch) {
+  const response = await apiClient.post('/embeddings', {
+    model: config.embedModel,
+    input: texts
+  });
+  const vectors = (response.data.data || []).map((item) => item.embedding);
+  return isBatch ? vectors : vectors[0];
 }
 
 async function embedText(input) {
@@ -41,14 +70,22 @@ async function embedText(input) {
 
   if (config.embeddingProvider === 'api') {
     try {
-      const response = await apiClient.post('/embeddings', {
-        model: config.embedModel,
-        input: texts
-      });
-      const vectors = (response.data.data || []).map((item) => item.embedding);
+      return await embedWithApi(texts, isBatch);
+    } catch (error) {
+      console.warn('API embedding failed, falling back to natural embeddings:', error.response?.data || error.message);
+    }
+  }
+
+  if (config.embeddingProvider === 'xenova') {
+    try {
+      const vectors = [];
+      for (const text of texts) {
+        // eslint-disable-next-line no-await-in-loop
+        vectors.push(await xenovaEmbed(text));
+      }
       return isBatch ? vectors : vectors[0];
     } catch (error) {
-      console.warn('API embedding failed, falling back to local embeddings:', error.response?.data || error.message);
+      console.warn('Xenova embedding failed, falling back to natural embeddings:', error.message);
     }
   }
 
@@ -78,5 +115,6 @@ module.exports = {
   apiClient,
   embedText,
   llmComplete,
-  localEmbed
+  localEmbed,
+  xenovaEmbed
 };

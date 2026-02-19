@@ -1,113 +1,243 @@
 # poc-node-rag-mcp
 
-A lightweight **Node.js POC** that demonstrates:
+A lightweight pure Node.js POC that demonstrates:
+- **RAG** (ingest PDF/text docs, chunk, embed, store vectors, retrieve top-k)
+- **MCP-style tool calling** over HTTP (`/mcp`)
+- **Config generation** from plain English rules
+- **Interactive CLI chat UI**
 
-- Retrieval-Augmented Generation (RAG) over local docs/PDFs
-- MCP-style tool endpoints for retrieval and config generation
-- A simple CLI chatbot interface
-- Local npm-based lightweight embeddings by default (no external embedding model required)
+---
 
-## Project Structure
+## 1) High-level design
+
+This project is intentionally modular and easy to reason about:
+
+1. **RAG Layer (`src/rag`)**
+   - Reads files from `docs/`
+   - Parses PDF/text
+   - Splits into chunks
+   - Generates embeddings
+   - Stores/query vectors in local `vectra` index
+
+2. **Tool Layer (`src/mcp/tools`)**
+   - `retrieval`: semantic lookup against vector index
+   - `configGenerator`: optional retrieval + LLM prompt -> JSON config
+
+3. **MCP HTTP Layer (`src/mcp/server.js`)**
+   - Exposes `POST /mcp` for tool invocation
+   - Exposes `GET /health`
+
+4. **UI Layer (`src/ui/chat-ui.js`)**
+   - CLI prompt flow
+   - Calls MCP tools via HTTP using axios
+
+This separation lets you swap internals (embedding provider, vector DB, LLM endpoint) with minimal changes.
+
+---
+
+## 2) Embedding providers (switch by `.env` flag)
+
+You can switch embedding backend by setting `EMBEDDING_PROVIDER` in `.env`:
+
+- `natural` (default): local lightweight hash-based embedding via npm package `natural`
+- `xenova`: local transformer embeddings via `@xenova/transformers` using `Xenova/all-MiniLM-L6-v2`
+- `api`: calls your embedding endpoint (`LLM_API_BASE/embeddings`)
+
+### Recommended defaults
+- For no external dependency: `EMBEDDING_PROVIDER=natural`
+- For higher-quality local embeddings: `EMBEDDING_PROVIDER=xenova`
+
+> **Important:** If you change embedding provider after indexing, clear `vector-index/` and re-ingest docs to keep vector dimensions consistent.
+
+---
+
+## 3) Project structure and file responsibilities
 
 ```text
 poc-node-rag-mcp/
 ├── src/
 │   ├── config/
-│   │   └── index.js
+│   │   └── index.js              # Loads and exports env-driven config
 │   ├── rag/
-│   │   ├── index.js
-│   │   └── utils.js
+│   │   ├── index.js              # ingestDocument, ingestDocsFolder, retrieve, getIndex
+│   │   └── utils.js              # chunkText helper
 │   ├── mcp/
-│   │   ├── server.js
+│   │   ├── server.js             # HTTP MCP gateway (/mcp, /health)
 │   │   ├── tools/
-│   │   │   ├── retrieval.js
-│   │   │   ├── configGenerator.js
-│   │   │   └── index.js
-│   │   └── utils.js
+│   │   │   ├── retrieval.js      # retrieval tool definition
+│   │   │   ├── configGenerator.js# config generation tool definition
+│   │   │   └── index.js          # allTools export
+│   │   └── utils.js              # Zod schemas for tool input validation
 │   ├── ui/
-│   │   └── chat-ui.js
+│   │   └── chat-ui.js            # CLI chatbot-like interface
 │   ├── utils/
-│   │   └── api.js
-│   └── index.js
-├── vector-index/
-├── docs/
+│   │   └── api.js                # embedText, localEmbed, xenovaEmbed, llmComplete
+│   └── index.js                  # startup orchestration (optional ingest + start server)
+├── docs/                         # input docs (pdf/txt/md)
+├── vector-index/                 # local vectra index (gitignored)
 ├── .env.example
 ├── .gitignore
 ├── package.json
 └── README.md
 ```
 
-## Setup
+---
 
-1. Install dependencies locally:
+## 4) Function-level explanation (easy map)
 
+### `src/index.js`
+- `ensureDirectories()`
+  - Ensures `docs/` and `vector-index/` exist.
+- `run()`
+  - Reads `--ingest` flag.
+  - Optionally ingests files.
+  - Starts MCP HTTP server.
+
+### `src/rag/index.js`
+- `getIndex()`
+  - Lazily initializes local `vectra` index.
+- `parseDocument(filePath)`
+  - Uses `pdf-parse` for PDFs; UTF-8 for text/markdown.
+- `ingestDocument(filePath)`
+  - Parse -> chunk -> embed -> insert each chunk to index.
+- `ingestDocsFolder(folderPath)`
+  - Finds supported files and ingests sequentially.
+- `retrieve(query, topK)`
+  - Embeds query and returns top matches.
+
+### `src/utils/api.js`
+- `localEmbed(text, dimensions)`
+  - Tokenize + stem + hash into dense fixed vector, normalized.
+- `xenovaEmbed(text)`
+  - Uses `@xenova/transformers` feature extraction pipeline (`Xenova/all-MiniLM-L6-v2`).
+- `embedText(input)`
+  - Switches provider based on `EMBEDDING_PROVIDER` (`natural`, `xenova`, `api`).
+- `llmComplete({ prompt, systemPrompt })`
+  - Calls chat completion endpoint for config generation output.
+
+### `src/mcp/server.js`
+- `startMcpServer(port)`
+  - Starts HTTP server.
+  - Handles `POST /mcp` `{ tool, arguments }`.
+  - Validates tool existence and executes tool handler.
+
+### `src/mcp/tools/retrieval.js`
+- `handler(args)`
+  - Validates with Zod.
+  - Calls `retrieve` and returns hits.
+
+### `src/mcp/tools/configGenerator.js`
+- `handler(args)`
+  - Validates with Zod.
+  - Optionally retrieves examples.
+  - Prompts LLM to return strict JSON config.
+
+### `src/ui/chat-ui.js`
+- `run()`
+  - CLI loop with `retrieval` / `config` modes.
+  - Calls MCP endpoint and prints result.
+
+---
+
+## 5) Setup
+
+### Prerequisites
+- Node.js 18+
+
+### Install
 ```bash
 npm install
 ```
 
-2. Create your environment file:
-
+### Configure
 ```bash
 cp .env.example .env
 ```
 
-3. Update `.env` with your internal LLM API settings.
+Edit `.env` as needed.
 
-### Embedding Mode
+---
 
-By default this project uses a local lightweight embedding model implemented with npm packages (`natural` + hashing), so you can run retrieval even without embedding API access.
+## 6) `.env` reference
 
-- `EMBEDDING_PROVIDER=local` (default): local embeddings, no embedding API calls
-- `EMBEDDING_PROVIDER=api`: call `LLM_API_BASE /embeddings` using `LLM_EMBED_MODEL`
+```env
+LLM_API_BASE=https://your-internal-llm-api.com
+LLM_API_KEY=your-api-key
+LLM_EMBED_MODEL=text-embedding-model
+EMBEDDING_PROVIDER=natural
+EMBEDDING_DIMENSIONS=256
+XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
+LLM_CHAT_MODEL=chat-completion-model
+MCP_PORT=3001
+TOP_K=5
+CHUNK_SIZE=500
+CHUNK_OVERLAP=50
+DOCS_DIR=./docs
+VECTOR_INDEX_DIR=./vector-index
+```
 
-You can tune `EMBEDDING_DIMENSIONS` (default `256`).
+---
 
-## Run
+## 7) How to run
 
-### 1) Optional: Ingest docs first
+### Step A: Add documents
+Place `.pdf`, `.txt`, or `.md` files in `docs/`.
 
-Put sample `.pdf`, `.txt`, or `.md` files in `docs/`, then run:
-
+### Step B: Ingest docs into vector index
 ```bash
 npm run ingest
 ```
 
-### 2) Start MCP server
-
+### Step C: Start MCP server
 ```bash
 npm start
 ```
 
-Server runs on `http://localhost:3001` by default.
-
-Tool endpoint:
-
+Health check:
 ```bash
-POST http://localhost:3001/mcp
+curl http://localhost:3001/health
 ```
 
-Payload format:
-
-```json
-{
-  "tool": "retrieval",
-  "arguments": {
-    "query": "What does the document say about filters?",
-    "topK": 5
-  }
-}
+### Step D: Call tool manually
+```bash
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"retrieval","arguments":{"query":"filter condition","topK":5}}'
 ```
 
-### 3) Launch CLI UI
-
+### Step E: Launch CLI chat UI
 ```bash
 npm run ui
 ```
 
-CLI script path: `src/ui/chat-ui.js`.
+---
 
-## Notes
+## 8) Design rationale
 
-- `vector-index/` is local and git-ignored.
-- `.env` is git-ignored.
-- This is intentionally simple and modular for POC purposes.
+- **Modular by domain**: `rag`, `mcp`, `ui`, and shared `utils` are isolated.
+- **POC simplicity**: No frontend bundler and no heavyweight framework.
+- **Swappable embeddings**: natural/xenova/api behind one function (`embedText`).
+- **Swappable storage**: vectra is local; can be replaced later in `src/rag` without changing tools/UI contracts.
+- **Validation-first tools**: Zod schemas prevent malformed tool calls.
+
+---
+
+## 9) Common troubleshooting
+
+1. **`retrieval` returns poor results**
+   - Re-ingest after changing embedding provider.
+   - Increase `CHUNK_SIZE` or tune `TOP_K`.
+
+2. **Xenova model load is slow first time**
+   - First run downloads model artifacts; later runs are faster.
+
+3. **Config generation fails**
+   - Verify `LLM_API_BASE`, `LLM_API_KEY`, and chat model endpoint compatibility.
+
+---
+
+## 10) Scripts
+
+- `npm start` → run MCP server
+- `npm run ingest` → ingest docs then run server startup path
+- `npm run ui` → start CLI UI
