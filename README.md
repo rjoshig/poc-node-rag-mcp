@@ -73,11 +73,13 @@ poc-node-rag-mcp/
 │   │   ├── contracts.ts
 │   │   ├── mcpClient.ts
 │   │   ├── toolHandlers.ts
+│   │   ├── tools/
+│   │   │   ├── ragSearch.ts
+│   │   │   └── salesforceFetch.ts
 │   │   ├── coreMcpServer.ts
 │   │   ├── ragMcpServer.placeholder.ts   # placeholder (not in active runtime)
 │   │   └── salesforceMcpServer.placeholder.ts # placeholder (not in active runtime)
 │   ├── rag/
-│   ├── tools/
 │   ├── utils/
 │   ├── types.ts
 │   └── index.ts
@@ -122,6 +124,14 @@ poc-node-rag-mcp/
 
 ### `src/mcp/mcpClient.ts`
 - Typed tool-call wrappers used by graph/UI.
+
+
+### `src/mcp/tools/ragSearch.ts`
+- MCP-exposed RAG helper used by MCP handlers.
+- Creates query embeddings and runs similarity search via vector adapter.
+
+### `src/mcp/tools/salesforceFetch.ts`
+- MCP-side placeholder for future Salesforce fetch integration.
 
 ### `src/graphs/mainGraph.ts`
 - Supervisor routing and conditional graph edges.

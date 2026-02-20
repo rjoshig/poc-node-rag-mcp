@@ -107,6 +107,13 @@ Why this helps:
 ## `src/mcp/mcpClient.ts`
 - Graph/UI side MCP caller wrappers.
 
+## `src/mcp/tools/ragSearch.ts`
+- MCP-exposed retrieval helper used by MCP tool handlers.
+- Performs query embedding + similarity search through vector adapter.
+
+## `src/mcp/tools/salesforceFetch.ts`
+- MCP-side placeholder scaffold for future `jsforce` integration.
+
 ## `src/graphs/mainGraph.ts`
 - Supervisor routing and node execution through MCP client.
 

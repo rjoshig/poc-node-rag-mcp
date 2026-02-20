@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createEmbeddingsProvider } from '../rag/embeddingsFactory';
-import { createVectorStore } from '../rag/vectorStoreFactory';
+import { createEmbeddingsProvider } from '../../rag/embeddingsFactory';
+import { createVectorStore } from '../../rag/vectorStoreFactory';
 
 export const ragSearchSchema = z.object({
   query: z.string().min(1),

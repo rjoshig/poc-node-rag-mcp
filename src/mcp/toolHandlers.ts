@@ -12,7 +12,8 @@ import {
   ToolName
 } from './contracts';
 import { completeChat } from '../utils/llm';
-import { ragSearch } from '../tools/ragSearch';
+import { ragSearch } from './tools/ragSearch';
+import { RetrievalChunk } from '../types';
 
 function traceId() {
   return crypto.randomUUID();
@@ -22,15 +23,15 @@ function now() {
   return Date.now();
 }
 
-function buildCitations(chunks: Awaited<ReturnType<typeof ragSearch>>) {
-  return chunks.map((c, i) => ({
+function buildCitations(chunks: RetrievalChunk[]) {
+  return chunks.map((c: RetrievalChunk, i: number) => ({
     id: `C${i + 1}`,
     source: c.source,
     score: c.score
   }));
 }
 
-function confidenceFromChunks(chunks: Awaited<ReturnType<typeof ragSearch>>) {
+function confidenceFromChunks(chunks: RetrievalChunk[]) {
   if (!chunks.length) return 0;
   const top = chunks[0]?.score ?? 0;
   return Math.max(0, Math.min(1, Number(top.toFixed(4))));
@@ -105,7 +106,7 @@ export async function handleRagAnswer(args: unknown): Promise<MpcResponseEnvelop
     const chunks = await ragSearch({ query: parsed.query, topK: parsed.topK });
     const confidence = confidenceFromChunks(chunks);
 
-    const context = chunks.map((h, i) => `[C${i + 1}] (${h.source}) ${h.content}`).join('\n\n');
+    const context = chunks.map((h: RetrievalChunk, i: number) => `[C${i + 1}] (${h.source}) ${h.content}`).join('\n\n');
 
     let answer = 'I am not sure based on the available private context.';
 
@@ -151,7 +152,7 @@ export async function handleConfigGenerate(args: unknown): Promise<MpcResponseEn
   try {
     const parsed = configGenerateSchema.parse(args);
     const chunks = parsed.useRagContext ? await ragSearch({ query: parsed.instruction, topK: parsed.topK }) : [];
-    const references = chunks.map((c, i) => `Example ${i + 1}: ${c.content}`).join('\n');
+    const references = chunks.map((c: RetrievalChunk, i: number) => `Example ${i + 1}: ${c.content}`).join('\n');
 
     const generatedConfig = await completeChat({
       system:
