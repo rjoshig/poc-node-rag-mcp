@@ -33,6 +33,11 @@
 - `rag.answer`
 - `config.generate`
 
+
+### MCP runtime clarification
+- **Active MCP runtime today** is `src/mcp/coreMcpServer.ts` (used by graph and UI).
+- `src/mcp/ragMcpServer.placeholder.ts` and `src/mcp/salesforceMcpServer.placeholder.ts` are intentionally named placeholders for future service-splitting and are **not** part of current execution path.
+
 All tool responses use a standardized envelope:
 ```json
 {
@@ -69,8 +74,8 @@ poc-node-rag-mcp/
 │   │   ├── mcpClient.ts
 │   │   ├── toolHandlers.ts
 │   │   ├── coreMcpServer.ts
-│   │   ├── ragMcpServer.ts               # placeholder
-│   │   └── salesforceMcpServer.ts        # placeholder
+│   │   ├── ragMcpServer.placeholder.ts   # placeholder (not in active runtime)
+│   │   └── salesforceMcpServer.placeholder.ts # placeholder (not in active runtime)
 │   ├── rag/
 │   ├── tools/
 │   ├── utils/

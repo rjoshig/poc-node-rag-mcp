@@ -11,6 +11,10 @@ Implemented MCP tools now:
 
 Graph and UI now call MCP through a typed client (`src/mcp/mcpClient.ts`).
 
+### Clarification on placeholder files
+- `src/mcp/coreMcpServer.ts` is the **active MCP runtime** used now.
+- `src/mcp/ragMcpServer.placeholder.ts` and `src/mcp/salesforceMcpServer.placeholder.ts` are naming-safe placeholders for future decomposition and are not executed in the current flow.
+
 ---
 
 ## 2) What does "single route per request" mean now?
