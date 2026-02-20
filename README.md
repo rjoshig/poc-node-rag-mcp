@@ -5,7 +5,7 @@
 - **LangGraph.js** for supervisor-style intent routing.
 - **Backroad UI** for chat, ingestion, retrieval, and config generation workflows.
 - **Switchable LLM provider** (`internal` OpenAI-compatible endpoint or `xai`).
-- **Switchable embeddings** (`xenova` / `nomic`).
+- **Switchable embeddings** (`xenova` / `nomic` / `xai`).
 - **Switchable vector store type** (`chroma` / `pgvector` / `vectra`).
 - **Active MCP runtime** for chat, retrieval, and config tools (implemented now).
 
@@ -149,7 +149,7 @@ poc-node-rag-mcp/
 - Moves ingested files to `data/processed/`.
 
 ### `src/rag/embeddingsFactory.ts`
-- `xenova` local embeddings + `nomic` remote option.
+- `xenova` local embeddings + `nomic` / `xai` remote options.
 
 ### `src/rag/vectorStoreFactory.ts`
 - `vectra` implemented.
@@ -177,6 +177,9 @@ EMBEDDING_TYPE=xenova
 XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
 NOMIC_EMBEDDING_URL=https://your-internal-embedding-endpoint
 NOMIC_EMBEDDING_API_KEY=your-api-key
+XAI_EMBEDDING_BASE_URL=https://api.x.ai/v1
+XAI_EMBEDDING_API_KEY=your-xai-api-key
+XAI_EMBEDDING_MODEL=your-xai-embedding-model-name
 VECTOR_DB_TYPE=chroma
 CHROMA_COLLECTION=agentic-rag
 CHROMA_URL=http://localhost:8000
@@ -220,9 +223,11 @@ Notes:
 Accepted values:
 - `xenova` (local embeddings via `@xenova/transformers`)
 - `nomic` (remote embedding endpoint via `NOMIC_EMBEDDING_URL` + `NOMIC_EMBEDDING_API_KEY`)
+- `xai` (OpenAI-compatible endpoint via `XAI_EMBEDDING_BASE_URL`, `XAI_EMBEDDING_API_KEY`, `XAI_EMBEDDING_MODEL`)
 
 Notes:
 - Invalid value falls back to `xenova`.
+- `xai` provider calls `<XAI_EMBEDDING_BASE_URL>/embeddings`, so set base URL like `https://api.x.ai/v1`.
 
 ### 5.3 Vector Store Switch (`VECTOR_DB_TYPE`)
 

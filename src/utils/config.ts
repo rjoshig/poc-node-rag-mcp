@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 type LlmProvider = 'internal' | 'xai';
-type EmbeddingType = 'xenova' | 'nomic';
+type EmbeddingType = 'xenova' | 'nomic' | 'xai';
 type VectorDbType = 'chroma' | 'pgvector' | 'vectra';
 
 function pickEnum<T extends string>(
@@ -49,10 +49,13 @@ export const config = {
   llmBaseUrl: llmProvider === 'xai' ? xaiLlmBaseUrl : internalLlmBaseUrl,
   llmApiKey: llmProvider === 'xai' ? xaiLlmApiKey : internalLlmApiKey,
   llmModel: llmProvider === 'xai' ? xaiLlmModel : internalLlmModel,
-  embeddingType: pickEnum(process.env.EMBEDDING_TYPE, ['xenova', 'nomic'] as const, 'xenova', 'EMBEDDING_TYPE') as EmbeddingType,
+  embeddingType: pickEnum(process.env.EMBEDDING_TYPE, ['xenova', 'nomic', 'xai'] as const, 'xenova', 'EMBEDDING_TYPE') as EmbeddingType,
   xenovaModel: process.env.XENOVA_MODEL ?? 'Xenova/all-MiniLM-L6-v2',
   nomicEmbeddingUrl: process.env.NOMIC_EMBEDDING_URL ?? 'https://your-internal-embedding-endpoint',
   nomicEmbeddingApiKey: process.env.NOMIC_EMBEDDING_API_KEY ?? 'your-api-key',
+  xaiEmbeddingBaseUrl: process.env.XAI_EMBEDDING_BASE_URL ?? xaiLlmBaseUrl,
+  xaiEmbeddingApiKey: process.env.XAI_EMBEDDING_API_KEY ?? xaiLlmApiKey,
+  xaiEmbeddingModel: process.env.XAI_EMBEDDING_MODEL ?? xaiLlmModel,
   vectorDbType: pickEnum(process.env.VECTOR_DB_TYPE, ['chroma', 'pgvector', 'vectra'] as const, 'chroma', 'VECTOR_DB_TYPE') as VectorDbType,
   chromaCollection: process.env.CHROMA_COLLECTION ?? 'agentic-rag',
   chromaUrl: process.env.CHROMA_URL ?? 'http://localhost:8000',

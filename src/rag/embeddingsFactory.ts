@@ -61,7 +61,47 @@ class NomicEmbeddingsProvider implements EmbeddingsProvider {
   }
 }
 
+class XaiEmbeddingsProvider implements EmbeddingsProvider {
+  private endpoint() {
+    return `${config.xaiEmbeddingBaseUrl.replace(/\/$/, '')}/embeddings`;
+  }
+
+  private async requestEmbeddings(input: string | string[]): Promise<number[][]> {
+    const response = await fetch(this.endpoint(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.xaiEmbeddingApiKey}`
+      },
+      body: JSON.stringify({
+        model: config.xaiEmbeddingModel,
+        input
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`xAI embedding failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
+    return (data.data ?? []).map((row) => row.embedding ?? []);
+  }
+
+  async embedQuery(text: string): Promise<number[]> {
+    const vectors = await this.requestEmbeddings(text);
+    return vectors[0] ?? [];
+  }
+
+  async embedDocuments(texts: string[]): Promise<number[][]> {
+    if (!texts.length) return [];
+    return this.requestEmbeddings(texts);
+  }
+}
+
 export function createEmbeddingsProvider(): EmbeddingsProvider {
+  if (config.embeddingType === 'xai') {
+    return new XaiEmbeddingsProvider();
+  }
   if (config.embeddingType === 'nomic') {
     return new NomicEmbeddingsProvider();
   }
