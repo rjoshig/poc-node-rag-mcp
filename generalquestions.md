@@ -176,3 +176,72 @@ npm run ingest
 ## 8) Notes
 - If embeddings/vector endpoint is unavailable, retrieval/config may fail with envelope errors.
 - Backroad library APIs can vary by version; app has guardrails for missing API surface.
+
+---
+
+## 9) Verified Test + pgAdmin SQL Reference
+
+### A) Verified ingestion test (Xenova embeddings)
+Use this when:
+- `EMBEDDING_TYPE=xenova`
+
+Run:
+```bash
+npm run ingest
+```
+
+Observed successful output example:
+```text
+Ingestion complete [ { file: 'Act5of2013Mizoram.pdf', chunks: 160 } ]
+```
+
+Expected behavior after success:
+- Source file is moved from `data/` to `data/processed/`
+- Vector records are upserted to configured vector store (`VECTOR_DB_TYPE`)
+
+### B) pgAdmin SQL queries to verify loaded data
+Open pgAdmin Query Tool on the same DB from `PGVECTOR_CONNECTION_STRING`, then run:
+
+```sql
+-- 1) Confirm table exists
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_name = 'rag_chunks';
+```
+
+```sql
+-- 2) Total chunks loaded
+SELECT COUNT(*) AS total_chunks
+FROM rag_chunks;
+```
+
+```sql
+-- 3) Preview rows
+SELECT
+  id,
+  source,
+  LEFT(content, 200) AS content_preview,
+  metadata
+FROM rag_chunks
+ORDER BY id
+LIMIT 20;
+```
+
+```sql
+-- 4) Check embedding dimensions
+SELECT
+  id,
+  vector_dims(embedding) AS embedding_dims
+FROM rag_chunks
+LIMIT 20;
+```
+
+```sql
+-- 5) Chunk count by source file
+SELECT
+  source,
+  COUNT(*) AS chunks
+FROM rag_chunks
+GROUP BY source
+ORDER BY chunks DESC;
+```
