@@ -11,6 +11,7 @@ const config = {
   embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS || 256),
   xenovaModel: process.env.XENOVA_MODEL || 'Xenova/all-MiniLM-L6-v2',
   chatModel: process.env.LLM_CHAT_MODEL || 'chat-completion-model',
+  useLangchain: String(process.env.USE_LANGCHAIN || 'false').toLowerCase() === 'true',
   mcpPort: Number(process.env.MCP_PORT || 3001),
   topK: Number(process.env.TOP_K || 5),
   chunkSize: Number(process.env.CHUNK_SIZE || 500),

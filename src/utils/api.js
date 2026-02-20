@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const natural = require('natural');
 const config = require('../config');
+const { langchainComplete } = require('./langchain');
 
 const tokenizer = new natural.WordTokenizer();
 let featureExtractorPromise;
@@ -94,6 +95,17 @@ async function embedText(input) {
 }
 
 async function llmComplete({ prompt, systemPrompt }) {
+  if (config.useLangchain) {
+    try {
+      return await langchainComplete({
+        systemPrompt,
+        userPrompt: prompt
+      });
+    } catch (error) {
+      console.warn('LangChain completion failed, falling back to direct API:', error.message);
+    }
+  }
+
   try {
     const response = await apiClient.post('/chat/completions', {
       model: config.chatModel,

@@ -5,6 +5,7 @@ A lightweight pure Node.js POC that demonstrates:
 - **MCP-style tool calling** over HTTP (`/mcp`)
 - **Grounded policy Q&A** (retrieve policy text + ask LLM for cited answer)
 - **General LLM chat** (direct LLM interaction without retrieval)
+- **Optional LangChain orchestration** for LLM prompt/response pipeline
 - **Config generation** from plain English rules
 - **Interactive CLI chat UI**
 
@@ -50,6 +51,10 @@ You can switch embedding backend by setting `EMBEDDING_PROVIDER` in `.env`:
 - For higher-quality local embeddings: `EMBEDDING_PROVIDER=xenova`
 
 > **Important:** If you change embedding provider after indexing, clear `vector-index/` and re-ingest docs to keep vector dimensions consistent.
+
+### LangChain toggle
+- `USE_LANGCHAIN=false` (default): use direct axios call to `/chat/completions`
+- `USE_LANGCHAIN=true`: route LLM calls through LangChain `PromptTemplate -> ChatOpenAI -> StringOutputParser`
 
 ---
 
@@ -116,7 +121,11 @@ poc-node-rag-mcp/
 - `embedText(input)`
   - Switches provider based on `EMBEDDING_PROVIDER` (`natural`, `xenova`, `api`).
 - `llmComplete({ prompt, systemPrompt })`
-  - Calls chat completion endpoint for config generation output.
+  - Calls LLM either via LangChain (if enabled) or direct API fallback.
+
+### `src/utils/langchain.js`
+- `langchainComplete({ systemPrompt, userPrompt })`
+  - LangChain pipeline: `PromptTemplate -> ChatOpenAI -> StringOutputParser`.
 
 ### `src/mcp/server.js`
 - `startMcpServer(port)`
@@ -178,6 +187,7 @@ EMBEDDING_PROVIDER=natural
 EMBEDDING_DIMENSIONS=256
 XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
 LLM_CHAT_MODEL=chat-completion-model
+USE_LANGCHAIN=false
 MCP_PORT=3001
 TOP_K=5
 CHUNK_SIZE=500
