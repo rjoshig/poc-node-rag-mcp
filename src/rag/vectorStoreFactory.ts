@@ -4,6 +4,8 @@ import { LocalIndex } from 'vectra';
 import { config } from '../utils/config';
 import { RetrievalChunk } from '../types';
 
+const { Pool } = require('pg') as { Pool: new (options: { connectionString: string }) => any };
+
 export interface VectorRecord {
   id: string;
   content: string;
@@ -71,20 +73,107 @@ class ChromaPlaceholderAdapter implements VectorStoreAdapter {
   }
 }
 
-class PgVectorPlaceholderAdapter implements VectorStoreAdapter {
-  // Placeholder adapter for pgvector integration.
-  // Production: create table with vector column and use cosine operators.
-  private fallback = new VectraAdapter();
-  async upsert(records: VectorRecord[]): Promise<void> {
-    return this.fallback.upsert(records);
+class PgVectorAdapter implements VectorStoreAdapter {
+  private pool: any = new Pool({ connectionString: config.pgvectorConnectionString });
+  private schemaInitPromise?: Promise<void>;
+
+  private async ensureSchema(): Promise<void> {
+    if (!this.schemaInitPromise) {
+      this.schemaInitPromise = (async () => {
+        const client = await this.pool.connect();
+        try {
+          await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+          await client.query(`
+            CREATE TABLE IF NOT EXISTS rag_chunks (
+              id TEXT PRIMARY KEY,
+              content TEXT NOT NULL,
+              source TEXT NOT NULL,
+              metadata JSONB,
+              embedding VECTOR NOT NULL
+            )
+          `);
+        } finally {
+          client.release();
+        }
+      })();
+    }
+    return this.schemaInitPromise;
   }
+
+  private toPgVector(embedding: number[]): string {
+    if (!embedding.length) {
+      throw new Error('Embedding vector cannot be empty.');
+    }
+
+    const sanitized = embedding.map((n) => {
+      if (!Number.isFinite(n)) {
+        throw new Error('Embedding vector contains non-finite values.');
+      }
+      return Number(n);
+    });
+
+    return `[${sanitized.join(',')}]`;
+  }
+
+  async upsert(records: VectorRecord[]): Promise<void> {
+    if (!records.length) return;
+    await this.ensureSchema();
+
+    for (const record of records) {
+      // eslint-disable-next-line no-await-in-loop
+      await this.pool.query(
+        `
+          INSERT INTO rag_chunks (id, content, source, metadata, embedding)
+          VALUES ($1, $2, $3, $4, $5::vector)
+          ON CONFLICT (id)
+          DO UPDATE SET
+            content = EXCLUDED.content,
+            source = EXCLUDED.source,
+            metadata = EXCLUDED.metadata,
+            embedding = EXCLUDED.embedding
+        `,
+        [
+          record.id,
+          record.content,
+          record.source,
+          JSON.stringify(record.metadata ?? {}),
+          this.toPgVector(record.embedding)
+        ]
+      );
+    }
+  }
+
   async similaritySearch(queryVector: number[], topK: number): Promise<RetrievalChunk[]> {
-    return this.fallback.similaritySearch(queryVector, topK);
+    await this.ensureSchema();
+
+    const limit = Number.isFinite(topK) ? Math.max(1, Math.floor(topK)) : 5;
+    const result = await this.pool.query(
+      `
+        SELECT
+          id,
+          content,
+          source,
+          metadata,
+          (1 - (embedding <=> $1::vector))::float8 AS score
+        FROM rag_chunks
+        ORDER BY embedding <=> $1::vector
+        LIMIT $2
+      `,
+      [this.toPgVector(queryVector), limit]
+    );
+
+    return result.rows.map((row: any) => ({
+      id: String(row.id),
+      content: String(row.content ?? ''),
+      source: String(row.source ?? 'unknown'),
+      score: Number(row.score ?? 0),
+      metadata: (row.metadata ?? {}) as Record<string, unknown>
+    }));
   }
 }
 
 export function createVectorStore(): VectorStoreAdapter {
-  if (config.vectorDbType === 'pgvector') return new PgVectorPlaceholderAdapter();
+  if (config.vectorDbType === 'pgvector') return new PgVectorAdapter();
   if (config.vectorDbType === 'chroma') return new ChromaPlaceholderAdapter();
   return new VectraAdapter();
 }

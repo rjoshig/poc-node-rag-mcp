@@ -152,8 +152,8 @@ poc-node-rag-mcp/
 - `xenova` local embeddings + `nomic` / `xai` remote options.
 
 ### `src/rag/vectorStoreFactory.ts`
-- `vectra` implemented.
-- `chroma` and `pgvector` scaffolded adapters (extension points).
+- `vectra` and `pgvector` implemented.
+- `chroma` scaffolded adapter (extension point).
 
 ### `src/agents/incidentResolverAgent.ts` (placeholder)
 - Placeholder only (no production behavior yet).
@@ -238,8 +238,8 @@ Accepted values:
 
 Notes:
 - Invalid value falls back to `chroma`.
-- Current code has full local implementation for `vectra`.
-- `chroma` and `pgvector` adapters are scaffolded placeholders right now and currently route through the Vectra fallback adapter.
+- Current code has full implementation for `vectra` and `pgvector`.
+- `chroma` adapter is scaffolded right now and currently routes through the Vectra fallback adapter.
 
 ---
 
