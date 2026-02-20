@@ -1,0 +1,5 @@
+node_modules/
+.env
+vector-index/
+.DS_Store
+npm-debug.log*
