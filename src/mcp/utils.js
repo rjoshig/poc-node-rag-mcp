@@ -2,7 +2,8 @@ const { z } = require('zod');
 
 const retrievalInputSchema = z.object({
   query: z.string().min(1),
-  topK: z.number().int().positive().optional()
+  topK: z.number().int().positive().optional(),
+  generateAnswer: z.boolean().optional()
 });
 
 const configGeneratorInputSchema = z.object({

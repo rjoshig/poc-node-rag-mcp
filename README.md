@@ -3,6 +3,7 @@
 A lightweight pure Node.js POC that demonstrates:
 - **RAG** (ingest PDF/text docs, chunk, embed, store vectors, retrieve top-k)
 - **MCP-style tool calling** over HTTP (`/mcp`)
+- **Grounded policy Q&A** (retrieve policy text + ask LLM for cited answer)
 - **Config generation** from plain English rules
 - **Interactive CLI chat UI**
 
@@ -20,7 +21,7 @@ This project is intentionally modular and easy to reason about:
    - Stores/query vectors in local `vectra` index
 
 2. **Tool Layer (`src/mcp/tools`)**
-   - `retrieval`: semantic lookup against vector index
+   - `retrieval`: semantic lookup + grounded LLM answer with citations
    - `configGenerator`: optional retrieval + LLM prompt -> JSON config
 
 3. **MCP HTTP Layer (`src/mcp/server.js`)**
@@ -124,7 +125,9 @@ poc-node-rag-mcp/
 ### `src/mcp/tools/retrieval.js`
 - `handler(args)`
   - Validates with Zod.
-  - Calls `retrieve` and returns hits.
+  - Calls `retrieve` to get top chunks.
+  - Sends user query + retrieved policy text to LLM for grounded answer.
+  - Returns `answer`, `citations`, and raw `results`.
 
 ### `src/mcp/tools/configGenerator.js`
 - `handler(args)`
@@ -240,4 +243,19 @@ npm run ui
 
 - `npm start` → run MCP server
 - `npm run ingest` → ingest docs then run server startup path
-- `npm run ui` → start CLI UI
+- `npm run ui` → start CLI UI (asks policy questions and shows citations)
+
+
+## 11) Grounded policy Q&A flow
+
+When a user asks something like "What is the leave policy?":
+
+1. `retrieval` tool embeds the question and fetches top policy chunks from vectordb.
+2. The tool builds context blocks with citation IDs (`[C1]`, `[C2]`, ...).
+3. It sends question + context to LLM with strict grounding instructions:
+   - answer only from context
+   - if unsure, clearly say so
+   - include citations
+4. Response is returned as `{ answer, citations, results }`.
+
+This keeps the chatbot factual and auditable by pointing users to specific retrieved chunks.

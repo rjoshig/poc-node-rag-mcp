@@ -8,6 +8,14 @@ async function callTool(tool, args) {
   return response.data.result;
 }
 
+function printCitations(citations = []) {
+  if (!citations.length) return;
+  console.log('\nCitations:');
+  citations.slice(0, 5).forEach((c) => {
+    console.log(`- [${c.id}] source=${c.source || 'unknown'} chunk=${c.chunkId} score=${Number(c.score || 0).toFixed(4)}`);
+  });
+}
+
 async function run() {
   console.log('=== poc-node-rag-mcp CLI Chat UI ===');
   console.log('Type mode as "retrieval" or "config". Type "exit" anytime to quit.');
@@ -27,8 +35,11 @@ async function run() {
         const result = await callTool('configGenerator', { instructions: text, useExamples: true });
         console.log('\nAssistant (config JSON):\n', result.generatedConfig);
       } else {
-        const result = await callTool('retrieval', { query: text, topK: 5 });
-        console.log('\nAssistant (retrieval):');
+        const result = await callTool('retrieval', { query: text, topK: 5, generateAnswer: true });
+        console.log('\nAssistant (policy answer):\n', result.answer || 'No answer generated.');
+        printCitations(result.citations);
+
+        console.log('\nRetrieved Chunks (debug):');
         (result.results || []).forEach((item, i) => {
           console.log(`${i + 1}. [score=${item.score}] ${item.text}`);
         });
