@@ -18,13 +18,13 @@ function printCitations(citations = []) {
 
 async function run() {
   console.log('=== poc-node-rag-mcp CLI Chat UI ===');
-  console.log('Type mode as "retrieval" or "config". Type "exit" anytime to quit.');
+  console.log('Modes: "retrieval" (policy Q&A), "chat" (general LLM), "config". Type "exit" anytime to quit.');
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
 
   while (true) {
-    const mode = (await ask('\nMode (retrieval/config): ')).trim().toLowerCase();
+    const mode = (await ask('\nMode (retrieval/chat/config): ')).trim().toLowerCase();
     if (mode === 'exit') break;
 
     const text = (await ask('Input: ')).trim();
@@ -34,6 +34,9 @@ async function run() {
       if (mode === 'config') {
         const result = await callTool('configGenerator', { instructions: text, useExamples: true });
         console.log('\nAssistant (config JSON):\n', result.generatedConfig);
+      } else if (mode === 'chat') {
+        const result = await callTool('chat', { message: text });
+        console.log('\nAssistant (general chat):\n', result.answer || 'No response generated.');
       } else {
         const result = await callTool('retrieval', { query: text, topK: 5, generateAnswer: true });
         console.log('\nAssistant (policy answer):\n', result.answer || 'No answer generated.');

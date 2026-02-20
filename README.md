@@ -4,6 +4,7 @@ A lightweight pure Node.js POC that demonstrates:
 - **RAG** (ingest PDF/text docs, chunk, embed, store vectors, retrieve top-k)
 - **MCP-style tool calling** over HTTP (`/mcp`)
 - **Grounded policy Q&A** (retrieve policy text + ask LLM for cited answer)
+- **General LLM chat** (direct LLM interaction without retrieval)
 - **Config generation** from plain English rules
 - **Interactive CLI chat UI**
 
@@ -67,6 +68,7 @@ poc-node-rag-mcp/
 │   │   ├── tools/
 │   │   │   ├── retrieval.js      # retrieval tool definition
 │   │   │   ├── configGenerator.js# config generation tool definition
+│   │   │   ├── chat.js           # general LLM chat tool
 │   │   │   └── index.js          # allTools export
 │   │   └── utils.js              # Zod schemas for tool input validation
 │   ├── ui/
@@ -128,6 +130,11 @@ poc-node-rag-mcp/
   - Calls `retrieve` to get top chunks.
   - Sends user query + retrieved policy text to LLM for grounded answer.
   - Returns `answer`, `citations`, and raw `results`.
+
+### `src/mcp/tools/chat.js`
+- `handler(args)`
+  - Validates with Zod.
+  - Sends user message directly to LLM for general chat response.
 
 ### `src/mcp/tools/configGenerator.js`
 - `handler(args)`
@@ -213,6 +220,11 @@ curl -X POST http://localhost:3001/mcp \
 npm run ui
 ```
 
+Then choose mode:
+- `retrieval` for policy answers grounded in documents (+ citations)
+- `chat` for direct LLM conversation
+- `config` for JSON config generation
+
 ---
 
 ## 8) Design rationale
@@ -243,7 +255,7 @@ npm run ui
 
 - `npm start` → run MCP server
 - `npm run ingest` → ingest docs then run server startup path
-- `npm run ui` → start CLI UI (asks policy questions and shows citations)
+- `npm run ui` → start CLI UI (retrieval mode + direct LLM chat mode + config mode)
 
 
 ## 11) Grounded policy Q&A flow
@@ -259,3 +271,16 @@ When a user asks something like "What is the leave policy?":
 4. Response is returned as `{ answer, citations, results }`.
 
 This keeps the chatbot factual and auditable by pointing users to specific retrieved chunks.
+
+
+## 12) Chat modes
+
+This chatbot supports both requested experiences:
+
+1. **Knowledge retrieval chat (`retrieval`)**
+   - Uses RAG retrieval + LLM grounding with citations (`[C1]`, `[C2]`).
+   - Best for policy/document Q&A.
+
+2. **Direct LLM chat (`chat`)**
+   - Sends the message directly to LLM without retrieval.
+   - Best for open-ended assistance not tied to indexed docs.

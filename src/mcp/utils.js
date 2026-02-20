@@ -12,7 +12,13 @@ const configGeneratorInputSchema = z.object({
   topK: z.number().int().positive().optional()
 });
 
+const chatInputSchema = z.object({
+  message: z.string().min(1),
+  systemPrompt: z.string().min(1).optional()
+});
+
 module.exports = {
   retrievalInputSchema,
-  configGeneratorInputSchema
+  configGeneratorInputSchema,
+  chatInputSchema
 };
