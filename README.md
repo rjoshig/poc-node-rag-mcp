@@ -4,9 +4,9 @@
 `poc-node-rag-mcp` is an **Agentic RAG platform** in Node.js/TypeScript with:
 - **LangGraph.js** for supervisor-style intent routing.
 - **Backroad UI** for chat, ingestion, retrieval, and config generation workflows.
-- **Switchable LLM provider** (`internal` OpenAI-compatible endpoint or `xai`).
-- **Switchable embeddings** (`xenova` / `nomic` / `xai`).
-- **Switchable vector store type** (`chroma` / `pgvector` / `vectra`).
+- **Internal OpenAI-compatible LLM endpoint** for chat/config/router classification.
+- **Xenova local embeddings** (`@xenova/transformers`).
+- **Vectra local file-based vector store**.
 - **Active MCP runtime** for chat, retrieval, and config tools (implemented now).
 
 ---
@@ -154,11 +154,10 @@ poc-node-rag-mcp/
 - Moves ingested files to `data/processed/`.
 
 ### `src/rag/embeddingsFactory.ts`
-- `xenova` local embeddings + `nomic` / `xai` remote options.
+- `xenova` local embeddings.
 
 ### `src/rag/vectorStoreFactory.ts`
-- `vectra` and `pgvector` implemented.
-- `chroma` scaffolded adapter (extension point).
+- `vectra` local adapter.
 
 ### `src/agents/incidentResolverAgent.ts` (placeholder)
 - Placeholder only (no production behavior yet).
@@ -171,24 +170,12 @@ poc-node-rag-mcp/
 ## 5) Environment Variables
 
 ```env
-USE_INTERNAL_OR_XAI_LLM=internal
 INTERNAL_LLM_BASE_URL=https://your-internal-openai-compatible-endpoint
 INTERNAL_LLM_API_KEY=your-api-key
 INTERNAL_LLM_MODEL=chatgpt-oss
-XAI_LLM_BASE_URL=https://api.x.ai/v1
-XAI_LLM_API_KEY=your-xai-api-key
-XAI_LLM_MODEL=your-xai-model-name
 EMBEDDING_TYPE=xenova
 XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
-NOMIC_EMBEDDING_URL=https://your-internal-embedding-endpoint
-NOMIC_EMBEDDING_API_KEY=your-api-key
-XAI_EMBEDDING_BASE_URL=https://api.x.ai/v1
-XAI_EMBEDDING_API_KEY=your-xai-api-key
-XAI_EMBEDDING_MODEL=your-xai-embedding-model-name
-VECTOR_DB_TYPE=chroma
-CHROMA_COLLECTION=agentic-rag
-CHROMA_URL=http://localhost:8000
-PGVECTOR_CONNECTION_STRING=postgresql://user:password@host.docker.internal:5432/ai
+VECTOR_DB_TYPE=vectra
 VECTRA_INDEX_DIR=./vector-index
 DATA_DIR=./data
 PROCESSED_DIR=./data/processed
@@ -206,48 +193,32 @@ SALESFORCE_PASSWORD=your-password
 SALESFORCE_SECURITY_TOKEN=your-token
 ```
 
-### 5.1 LLM Provider Switch (`USE_INTERNAL_OR_XAI_LLM`)
+### 5.1 LLM Settings
 
-Accepted values:
-- `internal`
-- `xai`
-
-Behavior:
-- If `USE_INTERNAL_OR_XAI_LLM=internal`, the app uses:
-  - `INTERNAL_LLM_BASE_URL`
-  - `INTERNAL_LLM_API_KEY`
-  - `INTERNAL_LLM_MODEL`
-- If `USE_INTERNAL_OR_XAI_LLM=xai`, the app uses:
-  - `XAI_LLM_BASE_URL`
-  - `XAI_LLM_API_KEY`
-  - `XAI_LLM_MODEL`
+Required variables:
+- `INTERNAL_LLM_BASE_URL`
+- `INTERNAL_LLM_API_KEY`
+- `INTERNAL_LLM_MODEL`
 
 Notes:
-- Invalid value falls back to `internal`.
 - The LLM client uses OpenAI-compatible chat completions; provide a compatible base URL and model.
 
 ### 5.2 Embedding Switch (`EMBEDDING_TYPE`)
 
 Accepted values:
 - `xenova` (local embeddings via `@xenova/transformers`)
-- `nomic` (remote embedding endpoint via `NOMIC_EMBEDDING_URL` + `NOMIC_EMBEDDING_API_KEY`)
-- `xai` (OpenAI-compatible endpoint via `XAI_EMBEDDING_BASE_URL`, `XAI_EMBEDDING_API_KEY`, `XAI_EMBEDDING_MODEL`)
 
 Notes:
 - Invalid value falls back to `xenova`.
-- `xai` provider calls `<XAI_EMBEDDING_BASE_URL>/embeddings`, so set base URL like `https://api.x.ai/v1`.
 
 ### 5.3 Vector Store Switch (`VECTOR_DB_TYPE`)
 
 Accepted values:
 - `vectra`
-- `chroma`
-- `pgvector`
 
 Notes:
-- Invalid value falls back to `chroma`.
-- Current code has full implementation for `vectra` and `pgvector`.
-- `chroma` adapter is scaffolded right now and currently routes through the Vectra fallback adapter.
+- Invalid value falls back to `vectra`.
+- Vectors are stored in local files under `VECTRA_INDEX_DIR`.
 
 ### 5.4 Router Confidence Tuning
 
@@ -269,13 +240,6 @@ Notes:
 npm install --legacy-peer-deps
 cp .env.example .env
 ```
-
-(Optional for pgvector)
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
----
 
 ## 7) Run
 
@@ -344,5 +308,5 @@ These remain placeholders by design in current increment:
 
 ## 11) Future Improvement Options
 - Add persistence/checkpointing for graph state.
-- Implement real Chroma and pgvector adapters.
+- Add optional external vector store adapters.
 - Add auth/tenant isolation and audit trails to MCP endpoints.

@@ -7,12 +7,7 @@ const internalClient = new OpenAI({
   baseURL: config.internalLlmBaseUrl
 });
 
-const xaiClient = new OpenAI({
-  apiKey: config.xaiLlmApiKey,
-  baseURL: config.xaiLlmBaseUrl
-});
-
-const openai = config.llmProvider === 'xai' ? xaiClient : internalClient;
+const openai = internalClient;
 
 export async function completeChat(params: { system?: string; user: string }): Promise<string> {
   const startedAt = Date.now();
