@@ -1,24 +1,38 @@
 {
   "name": "poc-node-rag-mcp",
-  "version": "1.0.0",
-  "description": "POC Node.js app for RAG + MCP + chatbot UI",
-  "main": "src/index.js",
+  "version": "2.0.0",
+  "description": "Agentic RAG platform with LangGraph + MCP + Backroad",
   "type": "commonjs",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "ingest": "node src/index.js --ingest",
-    "ui": "node src/ui/chat-ui.js"
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "ingest": "tsx src/rag/ingest.ts",
+    "test": "vitest run",
+    "tr": "vitest"
   },
   "dependencies": {
+    "@backroad/backroad": "^1.5.0",
+    "@langchain/community": "^1.1.16",
+    "@langchain/core": "^1.1.26",
+    "@langchain/langgraph": "~1.1.5",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "axios": "^1.7.9",
-    "dotenv": "^16.4.5",
-    "pdf-parse": "^1.1.1",
-    "vectra": "^0.12.3",
-    "zod": "^3.23.8",
-    "natural": "^6.12.0",
     "@xenova/transformers": "^2.17.2",
-    "@langchain/core": "^0.3.32",
-    "@langchain/openai": "^0.4.2"
+    "dotenv": "^16.4.5",
+    "jsforce": "~1.11.0",
+    "mammoth": "^1.8.0",
+    "openai": "^4.103.0",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.14.1",
+    "vectra": "^0.12.3",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.8"
   }
 }
