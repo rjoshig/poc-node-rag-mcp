@@ -125,10 +125,10 @@ Why this helps:
   - Generate Config
 
 ## `src/rag/embeddingsFactory.ts`
-- Embedding provider (`xenova` local).
+- Embedding provider switch (`xenova` / `nomic`).
 
 ## `src/rag/vectorStoreFactory.ts`
-- Vector store adapter (`vectra` local file index).
+- Vector store adapters (`vectra` implemented, chroma/pgvector scaffold).
 
 ## `src/rag/ingest.ts`
 - Multi-format ingestion and processed-file move.
@@ -179,7 +179,7 @@ npm run ingest
 
 ---
 
-## 9) Verified Test + Local Index Reference
+## 9) Verified Test + pgAdmin SQL Reference
 
 ### A) Verified ingestion test (Xenova embeddings)
 Use this when:
@@ -199,20 +199,49 @@ Expected behavior after success:
 - Source file is moved from `data/` to `data/processed/`
 - Vector records are upserted to configured vector store (`VECTOR_DB_TYPE`)
 
-### B) Local file checks to verify loaded data
-Use these commands:
+### B) pgAdmin SQL queries to verify loaded data
+Open pgAdmin Query Tool on the same DB from `PGVECTOR_CONNECTION_STRING`, then run:
 
-```bash
-# 1) Confirm processed file moved
-ls -la data/processed
+```sql
+-- 1) Confirm table exists
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_name = 'rag_chunks';
 ```
 
-```bash
-# 2) Confirm local Vectra index exists
-ls -la vector-index
+```sql
+-- 2) Total chunks loaded
+SELECT COUNT(*) AS total_chunks
+FROM rag_chunks;
 ```
 
-```bash
-# 3) See size growth after ingestion
-du -sh vector-index
+```sql
+-- 3) Preview rows
+SELECT
+  id,
+  source,
+  LEFT(content, 200) AS content_preview,
+  metadata
+FROM rag_chunks
+ORDER BY id
+LIMIT 20;
+```
+
+```sql
+-- 4) Check embedding dimensions
+SELECT
+  id,
+  vector_dims(embedding) AS embedding_dims
+FROM rag_chunks
+LIMIT 20;
+```
+
+```sql
+-- 5) Chunk count by source file
+SELECT
+  source,
+  COUNT(*) AS chunks
+FROM rag_chunks
+GROUP BY source
+ORDER BY chunks DESC;
 ```
