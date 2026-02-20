@@ -54,7 +54,12 @@ All tool responses use a standardized envelope:
 
 ### 2.3 Request Behavior
 1. User sends input in Backroad page.
-2. Graph determines route (`retrieval`, `chat`, `config`).
+2. Graph runs confidence-based routing:
+   - small-talk guard
+   - LLM intent classifier
+   - retrieval query rewrite
+   - retrieval probe (`rag.search`) + confidence scoring
+   - final route selection (`retrieval`/`chat`/`config`)
 3. Graph calls relevant MCP tool through `mcpClient`.
 4. MCP server executes tool logic and returns standardized envelope.
 5. UI renders answer/config/chunks/citations.
@@ -190,6 +195,9 @@ PROCESSED_DIR=./data/processed
 MCP_PORT=3001
 MCP_BASE_URL=http://localhost:3001
 BACKROAD_PORT=3000
+ROUTER_RETRIEVAL_CONFIDENCE_HIGH=0.2
+ROUTER_RETRIEVAL_CONFIDENCE_LOW=0.12
+ROUTER_INTENT_CONFIDENCE_HIGH=0.65
 SALESFORCE_LOGIN_URL=https://login.salesforce.com
 SALESFORCE_CLIENT_ID=your-client-id
 SALESFORCE_CLIENT_SECRET=your-client-secret
@@ -240,6 +248,18 @@ Notes:
 - Invalid value falls back to `chroma`.
 - Current code has full implementation for `vectra` and `pgvector`.
 - `chroma` adapter is scaffolded right now and currently routes through the Vectra fallback adapter.
+
+### 5.4 Router Confidence Tuning
+
+Accepted values:
+- `ROUTER_RETRIEVAL_CONFIDENCE_HIGH` (number, default `0.2`)
+- `ROUTER_RETRIEVAL_CONFIDENCE_LOW` (number, default `0.12`)
+- `ROUTER_INTENT_CONFIDENCE_HIGH` (number, default `0.65`)
+
+Notes:
+- Higher retrieval thresholds reduce false-positive retrieval routing.
+- Lower retrieval thresholds increase recall but can route more general chat into retrieval.
+- Intent confidence threshold controls how strongly classifier output overrides lexical fallback.
 
 ---
 
@@ -323,7 +343,6 @@ These remain placeholders by design in current increment:
 ---
 
 ## 11) Future Improvement Options
-- Replace keyword intent routing with classifier-based router.
 - Add persistence/checkpointing for graph state.
 - Implement real Chroma and pgvector adapters.
 - Add auth/tenant isolation and audit trails to MCP endpoints.

@@ -1,5 +1,6 @@
 import { pipeline } from '@xenova/transformers';
 import { config } from '../utils/config';
+import { devError, devLog } from '../utils/devLog';
 
 export interface EmbeddingsProvider {
   embedQuery(text: string): Promise<number[]>;
@@ -11,6 +12,7 @@ class XenovaEmbeddingsProvider implements EmbeddingsProvider {
 
   private async getExtractor() {
     if (!this.extractorPromise) {
+      devLog('embedding.xenova', 'loading extractor model', { model: config.xenovaModel });
       this.extractorPromise = pipeline('feature-extraction', config.xenovaModel);
     }
     return this.extractorPromise;
@@ -34,6 +36,10 @@ class XenovaEmbeddingsProvider implements EmbeddingsProvider {
 
 class NomicEmbeddingsProvider implements EmbeddingsProvider {
   async embedQuery(text: string): Promise<number[]> {
+    devLog('embedding.nomic', 'calling embedding endpoint', {
+      url: config.nomicEmbeddingUrl,
+      inputChars: text.length
+    });
     const response = await fetch(config.nomicEmbeddingUrl, {
       method: 'POST',
       headers: {
@@ -44,10 +50,12 @@ class NomicEmbeddingsProvider implements EmbeddingsProvider {
     });
 
     if (!response.ok) {
+      devError('embedding.nomic', 'embedding request failed', { status: response.status });
       throw new Error(`Nomic embedding failed: ${response.status}`);
     }
 
     const data = (await response.json()) as { embedding?: number[] };
+    devLog('embedding.nomic', 'embedding response', { dims: data.embedding?.length ?? 0 });
     return data.embedding ?? [];
   }
 
@@ -67,6 +75,11 @@ class XaiEmbeddingsProvider implements EmbeddingsProvider {
   }
 
   private async requestEmbeddings(input: string | string[]): Promise<number[][]> {
+    devLog('embedding.xai', 'calling embedding endpoint', {
+      endpoint: this.endpoint(),
+      model: config.xaiEmbeddingModel,
+      batchSize: Array.isArray(input) ? input.length : 1
+    });
     const response = await fetch(this.endpoint(), {
       method: 'POST',
       headers: {
@@ -80,11 +93,17 @@ class XaiEmbeddingsProvider implements EmbeddingsProvider {
     });
 
     if (!response.ok) {
+      devError('embedding.xai', 'embedding request failed', { status: response.status, model: config.xaiEmbeddingModel });
       throw new Error(`xAI embedding failed: ${response.status}`);
     }
 
     const data = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
-    return (data.data ?? []).map((row) => row.embedding ?? []);
+    const vectors = (data.data ?? []).map((row) => row.embedding ?? []);
+    devLog('embedding.xai', 'embedding response', {
+      vectors: vectors.length,
+      dims: vectors[0]?.length ?? 0
+    });
+    return vectors;
   }
 
   async embedQuery(text: string): Promise<number[]> {
@@ -100,10 +119,13 @@ class XaiEmbeddingsProvider implements EmbeddingsProvider {
 
 export function createEmbeddingsProvider(): EmbeddingsProvider {
   if (config.embeddingType === 'xai') {
+    devLog('embedding', 'provider selected', { provider: 'xai', endpoint: `${config.xaiEmbeddingBaseUrl.replace(/\/$/, '')}/embeddings` });
     return new XaiEmbeddingsProvider();
   }
   if (config.embeddingType === 'nomic') {
+    devLog('embedding', 'provider selected', { provider: 'nomic', endpoint: config.nomicEmbeddingUrl });
     return new NomicEmbeddingsProvider();
   }
+  devLog('embedding', 'provider selected', { provider: 'xenova', model: config.xenovaModel });
   return new XenovaEmbeddingsProvider();
 }

@@ -3,8 +3,20 @@ import path from 'node:path';
 import { LocalIndex } from 'vectra';
 import { config } from '../utils/config';
 import { RetrievalChunk } from '../types';
+import { devLog } from '../utils/devLog';
 
 const { Pool } = require('pg') as { Pool: new (options: { connectionString: string }) => any };
+
+function redactConnectionString(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.password) parsed.password = '***';
+    if (parsed.username) parsed.username = '***';
+    return parsed.toString();
+  } catch {
+    return '<invalid-connection-string>';
+  }
+}
 
 export interface VectorRecord {
   id: string;
@@ -34,6 +46,7 @@ class VectraAdapter implements VectorStoreAdapter {
 
   async upsert(records: VectorRecord[]): Promise<void> {
     await this.ensureIndex();
+    devLog('vector.vectra', 'upsert start', { records: records.length });
     for (const record of records) {
       // eslint-disable-next-line no-await-in-loop
       await this.index.insertItem({
@@ -50,6 +63,7 @@ class VectraAdapter implements VectorStoreAdapter {
 
   async similaritySearch(queryVector: number[], topK: number): Promise<RetrievalChunk[]> {
     await this.ensureIndex();
+    devLog('vector.vectra', 'similarity search', { topK, dims: queryVector.length });
     const hits = await this.index.queryItems(queryVector, "", topK);
     return hits.map((hit, i) => ({
       id: String(hit.item.metadata?.id ?? i),
@@ -80,6 +94,7 @@ class PgVectorAdapter implements VectorStoreAdapter {
   private async ensureSchema(): Promise<void> {
     if (!this.schemaInitPromise) {
       this.schemaInitPromise = (async () => {
+        devLog('vector.pgvector', 'initializing schema', { table: 'rag_chunks' });
         const client = await this.pool.connect();
         try {
           await client.query('CREATE EXTENSION IF NOT EXISTS vector');
@@ -118,6 +133,10 @@ class PgVectorAdapter implements VectorStoreAdapter {
   async upsert(records: VectorRecord[]): Promise<void> {
     if (!records.length) return;
     await this.ensureSchema();
+    devLog('vector.pgvector', 'upsert start', {
+      records: records.length,
+      connection: redactConnectionString(config.pgvectorConnectionString)
+    });
 
     for (const record of records) {
       // eslint-disable-next-line no-await-in-loop
@@ -147,6 +166,12 @@ class PgVectorAdapter implements VectorStoreAdapter {
     await this.ensureSchema();
 
     const limit = Number.isFinite(topK) ? Math.max(1, Math.floor(topK)) : 5;
+    const queryDims = queryVector.length;
+    devLog('vector.pgvector', 'similarity search', {
+      connection: redactConnectionString(config.pgvectorConnectionString),
+      topK: limit,
+      dims: queryDims
+    });
     const result = await this.pool.query(
       `
         SELECT
@@ -156,10 +181,11 @@ class PgVectorAdapter implements VectorStoreAdapter {
           metadata,
           (1 - (embedding <=> $1::vector))::float8 AS score
         FROM rag_chunks
+        WHERE vector_dims(embedding) = $3
         ORDER BY embedding <=> $1::vector
         LIMIT $2
       `,
-      [this.toPgVector(queryVector), limit]
+      [this.toPgVector(queryVector), limit, queryDims]
     );
 
     return result.rows.map((row: any) => ({
@@ -173,8 +199,15 @@ class PgVectorAdapter implements VectorStoreAdapter {
 }
 
 export function createVectorStore(): VectorStoreAdapter {
-  if (config.vectorDbType === 'pgvector') return new PgVectorAdapter();
-  if (config.vectorDbType === 'chroma') return new ChromaPlaceholderAdapter();
+  if (config.vectorDbType === 'pgvector') {
+    devLog('vector', 'adapter selected', { adapter: 'pgvector' });
+    return new PgVectorAdapter();
+  }
+  if (config.vectorDbType === 'chroma') {
+    devLog('vector', 'adapter selected', { adapter: 'chroma (vectra fallback)' });
+    return new ChromaPlaceholderAdapter();
+  }
+  devLog('vector', 'adapter selected', { adapter: 'vectra' });
   return new VectraAdapter();
 }
 

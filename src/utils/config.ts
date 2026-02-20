@@ -23,6 +23,13 @@ function pickEnum<T extends string>(
   return fallback;
 }
 
+function pickNumber(rawValue: string | undefined, fallback: number): number {
+  if (rawValue == null || rawValue.trim() === '') return fallback;
+  const value = Number(rawValue);
+  if (Number.isFinite(value)) return value;
+  return fallback;
+}
+
 const llmProvider = pickEnum(
   process.env.USE_INTERNAL_OR_XAI_LLM,
   ['internal', 'xai'] as const,
@@ -74,5 +81,8 @@ export const config = {
     username: process.env.SALESFORCE_USERNAME ?? '',
     password: process.env.SALESFORCE_PASSWORD ?? '',
     securityToken: process.env.SALESFORCE_SECURITY_TOKEN ?? ''
-  }
+  },
+  routerRetrievalConfidenceHigh: pickNumber(process.env.ROUTER_RETRIEVAL_CONFIDENCE_HIGH, 0.2),
+  routerRetrievalConfidenceLow: pickNumber(process.env.ROUTER_RETRIEVAL_CONFIDENCE_LOW, 0.12),
+  routerIntentConfidenceHigh: pickNumber(process.env.ROUTER_INTENT_CONFIDENCE_HIGH, 0.65)
 };

@@ -22,6 +22,7 @@ export const ragSearchSchema = z.object({
 
 export const ragAnswerSchema = z.object({
   query: z.string().min(1),
+  retrievalQuery: z.string().min(1).optional(),
   topK: z.number().int().positive().default(5),
   fallbackToChat: z.boolean().default(true)
 });

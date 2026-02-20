@@ -18,6 +18,10 @@ export interface GraphState {
   userInput: string;
   intent?: RouterIntent;
   answer?: string;
+  retrievalQuery?: string;
+  routeReason?: string;
+  routeConfidence?: number;
+  retrievalProbeConfidence?: number;
   citations?: Citation[];
   chunks?: RetrievalChunk[];
   generatedConfig?: string;

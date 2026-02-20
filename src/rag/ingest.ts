@@ -6,6 +6,7 @@ import mammoth from 'mammoth';
 import { createEmbeddingsProvider } from './embeddingsFactory';
 import { buildChunkId, createVectorStore, VectorRecord } from './vectorStoreFactory';
 import { config } from '../utils/config';
+import { devError, devLog } from '../utils/devLog';
 
 function chunkText(text: string, size = 1000, overlap = 150): string[] {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -21,6 +22,7 @@ function chunkText(text: string, size = 1000, overlap = 150): string[] {
 
 async function extractText(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
+  devLog('ingest.extract', 'reading file', { filePath, ext });
   const fileBuffer = await fs.readFile(filePath);
 
   if (ext === '.pdf') {
@@ -42,13 +44,21 @@ async function extractText(filePath: string): Promise<string> {
 }
 
 export async function ingestFile(filePath: string): Promise<{ file: string; chunks: number }> {
+  const startedAt = Date.now();
+  devLog('ingest.file', 'start', { filePath });
   const text = await extractText(filePath);
   const chunks = chunkText(text);
-  if (!chunks.length) return { file: filePath, chunks: 0 };
+  devLog('ingest.file', 'chunked', { filePath, textLength: text.length, chunks: chunks.length });
+  if (!chunks.length) {
+    devLog('ingest.file', 'skipped empty content', { filePath });
+    return { file: filePath, chunks: 0 };
+  }
 
   const embeddings = createEmbeddingsProvider();
   const vectorStore = createVectorStore();
+  devLog('ingest.file', 'embedding documents', { filePath, chunkCount: chunks.length });
   const vectors = await embeddings.embedDocuments(chunks);
+  devLog('ingest.file', 'embeddings ready', { filePath, vectorCount: vectors.length, vectorDims: vectors[0]?.length ?? 0 });
 
   const records: VectorRecord[] = chunks.map((content, idx) => ({
     id: buildChunkId(filePath, idx),
@@ -59,20 +69,24 @@ export async function ingestFile(filePath: string): Promise<{ file: string; chun
   }));
 
   await vectorStore.upsert(records);
+  devLog('ingest.file', 'vectors upserted', { filePath, records: records.length });
   await fs.mkdir(config.processedDir, { recursive: true });
   const destination = path.join(config.processedDir, path.basename(filePath));
   await fs.rename(filePath, destination);
+  devLog('ingest.file', 'moved to processed', { filePath, destination, latencyMs: Date.now() - startedAt });
 
   return { file: path.basename(filePath), chunks: chunks.length };
 }
 
 export async function ingestDirectory(dir = config.dataDir): Promise<Array<{ file: string; chunks: number }>> {
+  devLog('ingest.dir', 'start', { dir });
   await fs.mkdir(dir, { recursive: true });
   const entries = await fs.readdir(dir);
   const files = entries
     .filter((name) => !name.startsWith('.'))
     .map((name) => path.join(dir, name))
     .filter((fullPath) => fullPath !== config.processedDir);
+  devLog('ingest.dir', 'files discovered', { count: files.length, files });
 
   const results: Array<{ file: string; chunks: number }> = [];
   for (const filePath of files) {
@@ -82,6 +96,7 @@ export async function ingestDirectory(dir = config.dataDir): Promise<Array<{ fil
     // eslint-disable-next-line no-await-in-loop
     results.push(await ingestFile(filePath));
   }
+  devLog('ingest.dir', 'complete', { dir, processed: results.length });
   return results;
 }
 
@@ -91,6 +106,7 @@ if (require.main === module) {
       console.log('Ingestion complete', res);
     })
     .catch((error) => {
+      devError('ingest.dir', 'ingestion failed', error instanceof Error ? error.message : String(error));
       console.error('Ingestion failed', error);
       process.exit(1);
     });
