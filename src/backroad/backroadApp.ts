@@ -3,6 +3,7 @@ import path from 'node:path';
 import { runMainGraph } from '../graphs/mainGraph';
 import { ingestDirectory, ingestFile } from '../rag/ingest';
 import { config } from '../utils/config';
+import { mcpClient } from '../mcp/mcpClient';
 
 // Backroad API is evolving; keep integration resilient with runtime capability checks.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -24,7 +25,7 @@ export async function startBackroadApp() {
   const app = backroad.createApp({ title: 'Agentic RAG Platform', port: config.backroadPort });
 
   app.page('Chat', async (ui: any) => {
-    ui.markdown('## Chat & Agent Router');
+    ui.markdown('## Chat & Agent Router (MCP-backed)');
     const prompt = await ui.textInput('Ask anything (policy/config/general):');
     if (await ui.button('Run Graph')) {
       const result = await runMainGraph(prompt);
@@ -32,6 +33,16 @@ export async function startBackroadApp() {
       if (result.answer) ui.markdown(result.answer);
       if (result.generatedConfig) ui.code(result.generatedConfig, 'json');
       if (result.citations?.length) ui.json(result.citations);
+      if (result.errors?.length) ui.json({ errors: result.errors });
+    }
+  });
+
+  app.page('Retrieval', async (ui: any) => {
+    ui.markdown('## Retrieval + Grounded Answer (MCP rag.answer)');
+    const query = await ui.textInput('Query private knowledge base');
+    if (await ui.button('Run Retrieval')) {
+      const out = await mcpClient.ragAnswer({ query, topK: 5, fallbackToChat: true });
+      ui.json(out);
     }
   });
 
@@ -51,11 +62,12 @@ export async function startBackroadApp() {
   });
 
   app.page('Generate Config', async (ui: any) => {
-    ui.markdown('## Generate Batch Config');
+    ui.markdown('## Generate Batch Config (MCP config.generate)');
     const prompt = await ui.textArea('Enter natural language rules');
+    const useRag = await ui.checkbox('Use RAG examples', true);
     if (await ui.button('Generate')) {
-      const result = await runMainGraph(prompt);
-      ui.code(result.generatedConfig ?? '', 'json');
+      const result = await mcpClient.configGenerate({ instruction: prompt, useRagContext: useRag, topK: 3 });
+      ui.json(result);
     }
   });
 

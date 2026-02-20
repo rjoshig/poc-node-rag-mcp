@@ -20,6 +20,7 @@ export const config = {
   dataDir: path.resolve(process.cwd(), process.env.DATA_DIR ?? './data'),
   processedDir: path.resolve(process.cwd(), process.env.PROCESSED_DIR ?? './data/processed'),
   mcpPort: Number(process.env.MCP_PORT ?? 3001),
+  mcpBaseUrl: process.env.MCP_BASE_URL ?? `http://localhost:${Number(process.env.MCP_PORT ?? 3001)}`,
   backroadPort: Number(process.env.BACKROAD_PORT ?? 3000),
   salesforce: {
     loginUrl: process.env.SALESFORCE_LOGIN_URL ?? 'https://login.salesforce.com',

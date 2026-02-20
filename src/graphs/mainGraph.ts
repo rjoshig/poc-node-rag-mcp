@@ -1,8 +1,6 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
-import { completeChat } from '../utils/llm';
-import { batchConfigAgent } from '../agents/batchConfigAgent';
-import { retrievalAgent } from '../agents/retrievalAgent';
 import { routeIntent } from '../agents/supervisor';
+import { mcpClient } from '../mcp/mcpClient';
 
 const GraphAnnotation = Annotation.Root({
   userInput: Annotation<string>,
@@ -20,18 +18,34 @@ const detectIntentNode = async (state: typeof GraphAnnotation.State) => ({
 });
 
 const retrievalNode = async (state: typeof GraphAnnotation.State) => {
-  const result = await retrievalAgent(state.userInput);
-  return { ...state, answer: result.answer, citations: result.citations, chunks: result.chunks };
+  const response = await mcpClient.ragAnswer({ query: state.userInput, topK: 5, fallbackToChat: true });
+  return {
+    ...state,
+    answer: response.result?.answer ?? 'No answer available.',
+    citations: response.citations ?? [],
+    chunks: response.result?.chunks ?? [],
+    errors: response.errors ?? []
+  };
 };
 
 const chatNode = async (state: typeof GraphAnnotation.State) => {
-  const answer = await completeChat({ user: state.userInput });
-  return { ...state, answer };
+  const response = await mcpClient.chatAnswer({ message: state.userInput });
+  return {
+    ...state,
+    answer: response.result?.answer ?? 'No answer available.',
+    errors: response.errors ?? []
+  };
 };
 
 const configNode = async (state: typeof GraphAnnotation.State) => {
-  const output = await batchConfigAgent(state.userInput);
-  return { ...state, generatedConfig: output.generatedConfig, chunks: output.examples };
+  const response = await mcpClient.configGenerate({ instruction: state.userInput, useRagContext: true, topK: 3 });
+  return {
+    ...state,
+    generatedConfig: response.result?.generatedConfig ?? '',
+    chunks: response.result?.chunks ?? [],
+    citations: response.citations ?? [],
+    errors: response.errors ?? []
+  };
 };
 
 const graph = new StateGraph(GraphAnnotation)

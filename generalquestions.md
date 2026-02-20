@@ -1,218 +1,167 @@
 # General Questions & Function Flows
 
-This document explains how each major function/module in the project works, with practical flow and example usage.
+## 1) What changed in this iteration?
+MCP is now active for core runtime behavior (not just future placeholder).
 
-## 1) Core runtime concept
+Implemented MCP tools now:
+- `chat.answer`
+- `rag.search`
+- `rag.answer`
+- `config.generate`
 
-### What does "single route per request" mean?
-In `mainGraph`, each input is classified once by `routeIntent()` and then routed to exactly one node path (`retrieval` OR `chat` OR `config`).
-
-- It does **not** run all routes for one message.
-- This keeps latency lower and avoids mixing conflicting responses.
-
-Normal alternatives in larger systems:
-1. **Single-route (current):** fast, predictable, simple.
-2. **Multi-route parallel:** run retrieval + chat in parallel and fuse; better recall but more cost/complexity.
-3. **Two-stage route:** start retrieval first, fallback to chat if confidence is low.
-4. **Tool-calling planner:** LLM decides tool sequence dynamically.
-
-Current repo uses option 1 by default.
+Graph and UI now call MCP through a typed client (`src/mcp/mcpClient.ts`).
 
 ---
 
-## 2) End-to-end request flows
+## 2) What does "single route per request" mean now?
+Each user message is classified once and sent to exactly one graph path:
+- `retrieval`
+- `chat`
+- `config`
 
-### A) Policy question flow
-Input: "What is leave policy during probation?"
-1. Backroad Chat page calls `runMainGraph()`.
-2. `detectIntentNode` calls `routeIntent()` -> `retrieval`.
-3. `retrievalNode` runs `retrievalAgent()`.
-4. `retrievalAgent()` calls `ragSearch()`.
-5. `ragSearch()` computes query embedding + vector similarity search.
-6. Top chunks become context with citation labels.
-7. `completeChat()` sends query + context to internal LLM.
-8. UI shows answer + citations/chunks.
+This avoids running all paths simultaneously for every prompt.
 
-### B) General chat flow
-Input: "Summarize what this platform does"
-1. `routeIntent()` -> `chat`.
-2. `chatNode` calls `completeChat()` directly.
-3. UI shows general LLM response.
+### Normal patterns in production
+1. **Single route** (current): simple, fast.
+2. **Retrieval-first with fallback**: if low confidence, fallback to chat.
+3. **Parallel route + fusion**: costlier but can improve quality.
 
-### C) Config generation flow
-Input: "If score < 7 reject consumer, else accept"
-1. `routeIntent()` -> `config`.
-2. `configNode` runs `batchConfigAgent()`.
-3. Agent retrieves similar context via `ragSearch()`.
-4. Agent prompts LLM to return structured JSON.
-5. UI renders config payload.
-
-### D) Ingestion flow
-1. File uploaded from Backroad page or found in `data/` via CLI.
-2. `ingestFile()` extracts text by file type.
-3. Text chunked.
-4. Chunks embedded via provider factory.
-5. Upsert to vector store adapter.
-6. File moved to `data/processed/`.
+Current implementation includes fallback support in MCP `rag.answer` via `fallbackToChat`.
 
 ---
 
-## 3) File-by-file function guide
+## 3) End-to-end flows
+
+### A) Policy/private data question
+1. Backroad Chat sends prompt to `runMainGraph()`.
+2. Supervisor routes to `retrieval`.
+3. Graph calls MCP client `rag.answer`.
+4. MCP server runs `handleRagAnswer()`:
+   - vector retrieve
+   - confidence calculation
+   - grounded LLM response from retrieved context
+   - optional fallback chat if low confidence
+5. Returns standardized envelope with citations.
+
+### B) General question
+1. Route -> `chat`
+2. Calls MCP `chat.answer`
+3. Returns envelope with answer.
+
+### C) Config generation
+1. Route -> `config`
+2. Calls MCP `config.generate`
+3. If `useRagContext=true`, retrieves examples first
+4. LLM generates strict JSON output.
+
+### D) File ingestion
+1. Upload via Backroad page or CLI `npm run ingest`
+2. Parse by extension
+3. Chunk + embed + upsert
+4. Move file to `data/processed/`
+
+---
+
+## 4) MCP response envelope
+All MCP tool handlers return:
+
+```json
+{
+  "success": true,
+  "route": "rag.answer",
+  "traceId": "uuid",
+  "confidence": 0.64,
+  "result": {},
+  "citations": [],
+  "errors": [],
+  "latencyMs": 18
+}
+```
+
+Why this helps:
+- Consistent UI rendering
+- Easier logging and observability
+- Simpler downstream integration
+
+---
+
+## 5) Key files and what they do
 
 ## `src/index.ts`
-- `bootstrap()`
-  - Ensures runtime directories exist.
-  - Starts Backroad app.
+- Starts MCP server and Backroad app.
 
-## `src/utils/config.ts`
-- `config`
-  - Central env/config object with LLM, embeddings, vector DB, directories, Salesforce, ports.
+## `src/mcp/contracts.ts`
+- Defines MCP tool names, schemas, and response envelope types.
 
-## `src/utils/llm.ts`
-- `completeChat({ system?, user })`
-  - Calls internal OpenAI-compatible chat completion endpoint.
-  - Returns plain string output.
+## `src/mcp/coreMcpServer.ts`
+- Implements `/mcp` endpoint and tool dispatch.
 
-## `src/agents/supervisor.ts`
-- `routeIntent(input)`
-  - Keyword-based intent router.
-  - Returns `retrieval | chat | config`.
+## `src/mcp/toolHandlers.ts`
+- Implements logic for chat/retrieval/config tools.
+- Adds confidence, trace ID, errors, latency.
 
-## `src/agents/retrievalAgent.ts`
-- `retrievalAgent(query)`
-  - Calls RAG search.
-  - Builds citation context.
-  - Calls LLM with grounding instruction + context.
-  - Returns `{ answer, citations, chunks }`.
-
-## `src/agents/complianceAgent.ts`
-- `complianceAgent(question)`
-  - Wrapper around retrieval flow for compliance-centric usage.
-
-## `src/agents/batchConfigAgent.ts`
-- `batchConfigAgent(requirementText)`
-  - Retrieves examples from vector store.
-  - Prompts LLM to output strict JSON config.
-  - Returns generated config and supporting examples.
-
-## `src/agents/reportGenerationAgent.ts`
-- `reportGenerationAgentPlaceholder()`
-  - Placeholder for future report generation.
-
-## `src/agents/incidentResolverAgent.ts`
-- `incidentResolverAgentPlaceholder()`
-  - Placeholder for incident lookup + resolution recommendation.
-
-## `src/tools/ragSearch.ts`
-- `ragSearchSchema`
-  - Validates query input and topK.
-- `ragSearch(input)`
-  - Embeds query and performs vector similarity search.
-
-## `src/tools/salesforceFetch.ts`
-- `salesforceFetchSchema`
-  - Placeholder request schema.
-- `salesforceFetch()`
-  - Placeholder implementation for future `jsforce` query.
-
-## `src/rag/embeddingsFactory.ts`
-- `EmbeddingsProvider` interface
-  - Standard methods for query/doc embeddings.
-- `XenovaEmbeddingsProvider`
-  - Local model embeddings via transformers pipeline.
-- `NomicEmbeddingsProvider`
-  - Remote embedding API option.
-- `createEmbeddingsProvider()`
-  - Switches provider by `EMBEDDING_TYPE`.
-
-## `src/rag/vectorStoreFactory.ts`
-- `VectorStoreAdapter` interface
-  - Adapter abstraction for upsert/similarity search.
-- `VectraAdapter`
-  - Working local vector DB integration.
-- `ChromaPlaceholderAdapter`
-  - Placeholder scaffold, currently fallback behavior.
-- `PgVectorPlaceholderAdapter`
-  - Placeholder scaffold, currently fallback behavior.
-- `createVectorStore()`
-  - Switches adapter by `VECTOR_DB_TYPE`.
-- `buildChunkId(source, idx)`
-  - Generates stable chunk IDs.
-
-## `src/rag/ingest.ts`
-- `chunkText(text, size, overlap)`
-  - Sliding-window chunking.
-- `extractText(filePath)`
-  - File-type parsing for PDF/XLS/XLSX/DOC/DOCX/TXT.
-- `ingestFile(filePath)`
-  - Extract -> chunk -> embed -> upsert -> move to processed.
-- `ingestDirectory(dir?)`
-  - Batch ingestion for all files in folder.
+## `src/mcp/mcpClient.ts`
+- Graph/UI side MCP caller wrappers.
 
 ## `src/graphs/mainGraph.ts`
-- `detectIntentNode`
-  - Classifies message route intent.
-- `retrievalNode`
-  - Executes retrieval agent.
-- `chatNode`
-  - Executes direct chat.
-- `configNode`
-  - Executes batch config generation.
-- `runMainGraph(userInput)`
-  - Graph entrypoint for app/API usage.
+- Supervisor routing and node execution through MCP client.
 
 ## `src/backroad/backroadApp.ts`
-- `copyUploadToData(filePath)`
-  - Copies uploaded file into ingestion folder.
-- `startBackroadApp()`
-  - Starts Backroad app and pages:
-    - Chat
-    - Ingest
-    - Generate Config
-  - Includes runtime-safe fallback if Backroad API signature differs.
+- UI pages:
+  - Chat
+  - Retrieval
+  - Ingest
+  - Generate Config
 
-## `src/mcp/ragMcpServer.ts`
-- `startRagMcpServerPlaceholder()`
-  - Placeholder for future dedicated RAG MCP server.
+## `src/rag/embeddingsFactory.ts`
+- Embedding provider switch (`xenova` / `nomic`).
 
-## `src/mcp/salesforceMcpServer.ts`
-- `startSalesforceMcpServerPlaceholder()`
-  - Placeholder for future Salesforce MCP server.
+## `src/rag/vectorStoreFactory.ts`
+- Vector store adapters (`vectra` implemented, chroma/pgvector scaffold).
 
-## `src/types.ts`
-- Shared types/interfaces for graph state, citations, retrieval chunks, and router intent.
+## `src/rag/ingest.ts`
+- Multi-format ingestion and processed-file move.
 
-## `tests/supervisor.test.ts`
-- Validates routing behavior:
-  - policy -> retrieval
-  - config text -> config
-  - generic -> chat
+## `src/agents/incidentResolverAgent.ts`
+- Placeholder only in this phase.
+
+## `src/agents/reportGenerationAgent.ts`
+- Placeholder only in this phase.
 
 ---
 
-## 4) Practical task examples
-
-### Task: Add a new agent (e.g., report quality auditor)
-1. Add `src/agents/reportQualityAgent.ts`.
-2. Add node in `mainGraph.ts`.
-3. Update `routeIntent()` to map relevant queries.
-4. Add UI mode/page in Backroad if needed.
-5. Add tests for routing and output schema.
-
-### Task: Replace placeholder pgvector adapter with real implementation
-1. Implement SQL table + vector column bootstrap.
-2. Implement upsert with embeddings.
-3. Implement similarity query with cosine distance.
-4. Keep `VectorStoreAdapter` interface unchanged.
-
-### Task: Add confidence-based fallback from retrieval -> chat
-1. In `retrievalAgent`, inspect hit count/scores.
-2. If insufficient, call `completeChat()` without retrieval context or with explicit uncertainty strategy.
-3. Optionally include reason in output metadata.
+## 6) Placeholder policy (intentional)
+Still placeholders by design:
+- Incident resolver advanced behavior
+- Report generation workflow
+- Dedicated Salesforce MCP implementation details
+- Dedicated split RAG MCP service decomposition (core MCP is active now)
 
 ---
 
-## 5) Summary
-- Current system already does RAG with LLM grounding in retrieval path.
-- Routing is intentionally single-path per message.
-- Architecture is modular so teams can extend agents, tools, and MCP services independently.
+## 7) Practical examples
+
+### Call MCP rag.answer directly
+```bash
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"rag.answer","arguments":{"query":"What is leave policy?","topK":5,"fallbackToChat":true}}'
+```
+
+### Call MCP config.generate directly
+```bash
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"config.generate","arguments":{"instruction":"if score < 7 reject","useRagContext":true,"topK":3}}'
+```
+
+### Ingest docs via CLI
+```bash
+npm run ingest
+```
+
+---
+
+## 8) Notes
+- If embeddings/vector endpoint is unavailable, retrieval/config may fail with envelope errors.
+- Backroad library APIs can vary by version; app has guardrails for missing API surface.
