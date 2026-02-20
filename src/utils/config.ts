@@ -3,15 +3,57 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+type LlmProvider = 'internal' | 'xai';
+type EmbeddingType = 'xenova' | 'nomic';
+type VectorDbType = 'chroma' | 'pgvector' | 'vectra';
+
+function pickEnum<T extends string>(
+  rawValue: string | undefined,
+  allowed: readonly T[],
+  fallback: T,
+  envName: string
+): T {
+  const normalized = rawValue?.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if ((allowed as readonly string[]).includes(normalized)) return normalized as T;
+
+  console.warn(
+    `[config] Invalid ${envName}="${rawValue}". Falling back to "${fallback}". Accepted values: ${allowed.join(', ')}`
+  );
+  return fallback;
+}
+
+const llmProvider = pickEnum(
+  process.env.USE_INTERNAL_OR_XAI_LLM,
+  ['internal', 'xai'] as const,
+  'internal',
+  'USE_INTERNAL_OR_XAI_LLM'
+);
+
+const internalLlmBaseUrl = process.env.INTERNAL_LLM_BASE_URL ?? 'https://your-internal-openai-compatible-endpoint';
+const internalLlmApiKey = process.env.INTERNAL_LLM_API_KEY ?? 'your-api-key';
+const internalLlmModel = process.env.INTERNAL_LLM_MODEL ?? 'chatgpt-oss';
+
+const xaiLlmBaseUrl = process.env.XAI_LLM_BASE_URL ?? 'https://api.x.ai/v1';
+const xaiLlmApiKey = process.env.XAI_LLM_API_KEY ?? 'your-xai-api-key';
+const xaiLlmModel = process.env.XAI_LLM_MODEL ?? 'your-xai-model-name';
+
 export const config = {
-  llmBaseUrl: process.env.INTERNAL_LLM_BASE_URL ?? 'https://your-internal-openai-compatible-endpoint',
-  llmApiKey: process.env.INTERNAL_LLM_API_KEY ?? 'your-api-key',
-  llmModel: process.env.INTERNAL_LLM_MODEL ?? 'chatgpt-oss',
-  embeddingType: (process.env.EMBEDDING_TYPE ?? 'xenova') as 'xenova' | 'nomic',
+  llmProvider,
+  internalLlmBaseUrl,
+  internalLlmApiKey,
+  internalLlmModel,
+  xaiLlmBaseUrl,
+  xaiLlmApiKey,
+  xaiLlmModel,
+  llmBaseUrl: llmProvider === 'xai' ? xaiLlmBaseUrl : internalLlmBaseUrl,
+  llmApiKey: llmProvider === 'xai' ? xaiLlmApiKey : internalLlmApiKey,
+  llmModel: llmProvider === 'xai' ? xaiLlmModel : internalLlmModel,
+  embeddingType: pickEnum(process.env.EMBEDDING_TYPE, ['xenova', 'nomic'] as const, 'xenova', 'EMBEDDING_TYPE') as EmbeddingType,
   xenovaModel: process.env.XENOVA_MODEL ?? 'Xenova/all-MiniLM-L6-v2',
   nomicEmbeddingUrl: process.env.NOMIC_EMBEDDING_URL ?? 'https://your-internal-embedding-endpoint',
   nomicEmbeddingApiKey: process.env.NOMIC_EMBEDDING_API_KEY ?? 'your-api-key',
-  vectorDbType: (process.env.VECTOR_DB_TYPE ?? 'chroma') as 'chroma' | 'pgvector' | 'vectra',
+  vectorDbType: pickEnum(process.env.VECTOR_DB_TYPE, ['chroma', 'pgvector', 'vectra'] as const, 'chroma', 'VECTOR_DB_TYPE') as VectorDbType,
   chromaCollection: process.env.CHROMA_COLLECTION ?? 'agentic-rag',
   chromaUrl: process.env.CHROMA_URL ?? 'http://localhost:8000',
   pgvectorConnectionString:

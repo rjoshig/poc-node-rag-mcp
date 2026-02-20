@@ -1,10 +1,17 @@
 import OpenAI from 'openai';
 import { config } from './config';
 
-const openai = new OpenAI({
-  apiKey: config.llmApiKey,
-  baseURL: config.llmBaseUrl
+const internalClient = new OpenAI({
+  apiKey: config.internalLlmApiKey,
+  baseURL: config.internalLlmBaseUrl
 });
+
+const xaiClient = new OpenAI({
+  apiKey: config.xaiLlmApiKey,
+  baseURL: config.xaiLlmBaseUrl
+});
+
+const openai = config.llmProvider === 'xai' ? xaiClient : internalClient;
 
 export async function completeChat(params: { system?: string; user: string }): Promise<string> {
   const response = await openai.chat.completions.create({

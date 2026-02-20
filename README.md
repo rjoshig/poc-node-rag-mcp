@@ -4,7 +4,7 @@
 `poc-node-rag-mcp` is an **Agentic RAG platform** in Node.js/TypeScript with:
 - **LangGraph.js** for supervisor-style intent routing.
 - **Backroad UI** for chat, ingestion, retrieval, and config generation workflows.
-- **Internal OpenAI-compatible LLM** client (model default: `chatgpt-oss`).
+- **Switchable LLM provider** (`internal` OpenAI-compatible endpoint or `xai`).
 - **Switchable embeddings** (`xenova` / `nomic`).
 - **Switchable vector store type** (`chroma` / `pgvector` / `vectra`).
 - **Active MCP runtime** for chat, retrieval, and config tools (implemented now).
@@ -166,9 +166,13 @@ poc-node-rag-mcp/
 ## 5) Environment Variables
 
 ```env
+USE_INTERNAL_OR_XAI_LLM=internal
 INTERNAL_LLM_BASE_URL=https://your-internal-openai-compatible-endpoint
 INTERNAL_LLM_API_KEY=your-api-key
 INTERNAL_LLM_MODEL=chatgpt-oss
+XAI_LLM_BASE_URL=https://api.x.ai/v1
+XAI_LLM_API_KEY=your-xai-api-key
+XAI_LLM_MODEL=your-xai-model-name
 EMBEDDING_TYPE=xenova
 XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
 NOMIC_EMBEDDING_URL=https://your-internal-embedding-endpoint
@@ -190,6 +194,47 @@ SALESFORCE_USERNAME=your-username
 SALESFORCE_PASSWORD=your-password
 SALESFORCE_SECURITY_TOKEN=your-token
 ```
+
+### 5.1 LLM Provider Switch (`USE_INTERNAL_OR_XAI_LLM`)
+
+Accepted values:
+- `internal`
+- `xai`
+
+Behavior:
+- If `USE_INTERNAL_OR_XAI_LLM=internal`, the app uses:
+  - `INTERNAL_LLM_BASE_URL`
+  - `INTERNAL_LLM_API_KEY`
+  - `INTERNAL_LLM_MODEL`
+- If `USE_INTERNAL_OR_XAI_LLM=xai`, the app uses:
+  - `XAI_LLM_BASE_URL`
+  - `XAI_LLM_API_KEY`
+  - `XAI_LLM_MODEL`
+
+Notes:
+- Invalid value falls back to `internal`.
+- The LLM client uses OpenAI-compatible chat completions; provide a compatible base URL and model.
+
+### 5.2 Embedding Switch (`EMBEDDING_TYPE`)
+
+Accepted values:
+- `xenova` (local embeddings via `@xenova/transformers`)
+- `nomic` (remote embedding endpoint via `NOMIC_EMBEDDING_URL` + `NOMIC_EMBEDDING_API_KEY`)
+
+Notes:
+- Invalid value falls back to `xenova`.
+
+### 5.3 Vector Store Switch (`VECTOR_DB_TYPE`)
+
+Accepted values:
+- `vectra`
+- `chroma`
+- `pgvector`
+
+Notes:
+- Invalid value falls back to `chroma`.
+- Current code has full local implementation for `vectra`.
+- `chroma` and `pgvector` adapters are scaffolded placeholders right now and currently route through the Vectra fallback adapter.
 
 ---
 
