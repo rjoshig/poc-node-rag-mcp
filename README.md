@@ -1,103 +1,301 @@
 # poc-node-rag-mcp
 
-## Project Overview
-This repository is a modular Agentic RAG platform in Node.js/TypeScript using:
-- **LangGraph.js** for supervisor routing and multi-agent execution.
-- **MCP-ready architecture** for future decentralized tool servers.
-- **Backroad UI** for chat, file ingestion, retrieval, and config-generation workflows.
-- **Switchable embeddings** and **switchable vector store adapters**.
-- **Internal OpenAI-compatible LLM** (`chatgpt-oss`) via `INTERNAL_LLM_BASE_URL` and `INTERNAL_LLM_API_KEY`.
+## 1) High-Level Overview
+`poc-node-rag-mcp` is an **Agentic RAG platform** in Node.js/TypeScript with:
+- **LangGraph.js** for supervisor-style intent routing.
+- **Backroad UI** for chat, ingestion, retrieval, and config generation workflows.
+- **Internal OpenAI-compatible LLM** client (model default: `chatgpt-oss`).
+- **Switchable embeddings** (`xenova` / `nomic`).
+- **Switchable vector store type** (`chroma` / `pgvector` / `vectra`).
+- **MCP scaffolding** for future independently deployed tool servers.
 
-## Architecture / Internal Working
-1. User message enters `mainGraph` (`src/graphs/mainGraph.ts`).
-2. Supervisor (`src/agents/supervisor.ts`) detects intent: `retrieval` / `chat` / `config`.
-3. Routed agent executes:
-   - `retrievalAgent`: RAG search + grounded answer with citations.
-   - `batchConfigAgent`: rules-to-JSON generation with retrieved examples.
-   - direct `chat`: general LLM response.
-4. Backroad UI (`src/backroad/backroadApp.ts`) renders outputs.
+The current implementation is designed for extensibility and team ownership by module.
 
-### Current routing behavior
-- The graph performs **one routed path per request**, not “always both”.
-- If input appears policy/compliance-related, it routes to RAG retrieval.
-- Otherwise it routes to direct chat.
+---
 
-## Setup
+## 2) Design & Architecture
+
+### 2.1 Logical Layers
+1. **UI Layer (`src/backroad`)**
+   - User interaction: chat, upload/ingest, config generation.
+2. **Graph Orchestration Layer (`src/graphs`)**
+   - Intent routing and agent workflow orchestration via LangGraph.
+3. **Agent Layer (`src/agents`)**
+   - Domain-specific behavior (retrieval reasoning, config generation, placeholders for future agents).
+4. **Tool Layer (`src/tools`)**
+   - Reusable tool-like functions (RAG search, Salesforce placeholders).
+5. **RAG Layer (`src/rag`)**
+   - Embedding provider, vector store adapter, ingestion pipeline.
+6. **Platform Utilities (`src/utils`)**
+   - Env config + internal LLM client.
+7. **MCP Layer (`src/mcp`)**
+   - Phase-2 server placeholders for team-owned tool servers.
+
+### 2.2 Request Flow (Behavior)
+When a user enters text in Chat page:
+1. Input is sent to `runMainGraph()`.
+2. Supervisor detects intent (`retrieval` / `chat` / `config`).
+3. Graph routes to one node path.
+4. Agent executes and returns output to UI.
+
+**Important behavior note:**
+- It does **single-route execution per request** (not "chat + retrieval always").
+- Policy/compliance-like prompts route to `retrieval` path.
+- General prompts route to `chat` path.
+- Rule/config prompts route to `config` path.
+
+---
+
+## 3) Directory Structure
+
+```text
+poc-node-rag-mcp/
+├── src/
+│   ├── agents/
+│   ├── backroad/
+│   ├── graphs/
+│   ├── mcp/
+│   ├── rag/
+│   ├── tools/
+│   ├── utils/
+│   ├── types.ts
+│   └── index.ts
+├── data/
+├── data/processed/
+├── tests/
+├── .env.example
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+---
+
+## 4) File-by-File Code-Level Function Map
+
+### `src/index.ts`
+- Bootstraps app startup.
+- Ensures `data/` and `data/processed/` directories exist.
+- Starts Backroad app.
+
+### `src/types.ts`
+- Shared state and schema-like TypeScript interfaces/types for graph outputs and retrieval payloads.
+
+### `src/utils/config.ts`
+- Loads environment variables with `dotenv`.
+- Exposes strongly-typed runtime config:
+  - LLM settings
+  - embedding/vector store toggles
+  - directory paths
+  - ports
+  - Salesforce credentials.
+
+### `src/utils/llm.ts`
+- Internal OpenAI-compatible LLM wrapper (`openai` package).
+- Uses:
+  - `INTERNAL_LLM_BASE_URL`
+  - `INTERNAL_LLM_API_KEY`
+  - `INTERNAL_LLM_MODEL`.
+- Exposes `completeChat()` used by agents.
+
+### `src/rag/embeddingsFactory.ts`
+- Embedding provider factory:
+  - `XenovaEmbeddingsProvider` (local transformer embeddings)
+  - `NomicEmbeddingsProvider` (remote/internal embedding endpoint)
+- Exposes `createEmbeddingsProvider()`.
+
+### `src/rag/vectorStoreFactory.ts`
+- Vector adapter abstraction.
+- Current fully operational adapter: `VectraAdapter`.
+- Placeholder/scaffold adapters:
+  - `ChromaPlaceholderAdapter`
+  - `PgVectorPlaceholderAdapter`
+- Exposes `createVectorStore()` and `buildChunkId()`.
+
+### `src/rag/ingest.ts`
+- Multi-format document ingestion:
+  - PDF (`pdf-parse`)
+  - Excel (`xlsx`)
+  - DOC/DOCX (`mammoth`)
+  - TXT fallback (`fs`)
+- Chunking + embedding + vector upsert.
+- Moves successfully ingested files to `data/processed/`.
+- Supports CLI run (`npm run ingest`).
+
+### `src/tools/ragSearch.ts`
+- Tool-like wrapper for similarity search with Zod validation.
+- Used by retrieval and config agents.
+
+### `src/tools/salesforceFetch.ts`
+- Salesforce fetch placeholder scaffold for future `jsforce` integration.
+
+### `src/agents/supervisor.ts`
+- Intent router (`routeIntent`) using deterministic keyword heuristics.
+
+### `src/agents/retrievalAgent.ts`
+- Runs RAG search.
+- Builds context with citations (`[C1]`, `[C2]`, ...).
+- Calls LLM for grounded response.
+- Returns answer + citations + chunks.
+
+### `src/agents/complianceAgent.ts`
+- Thin wrapper around retrieval for compliance-centric usage.
+
+### `src/agents/batchConfigAgent.ts`
+- Retrieves similar context examples.
+- Prompts LLM to generate structured config JSON output.
+
+### `src/agents/reportGenerationAgent.ts`
+- Placeholder for future enterprise report generation agent.
+
+### `src/agents/incidentResolverAgent.ts`
+- Placeholder for incident similarity + resolution recommendation agent.
+- Intended to use incident/resolution corpora ingested into vector DB.
+
+### `src/graphs/mainGraph.ts`
+- Main LangGraph `StateGraph`:
+  - detect intent node
+  - retrieval node
+  - chat node
+  - config node
+- Conditional edge routing based on intent.
+- Entry function: `runMainGraph(userInput)`.
+
+### `src/backroad/backroadApp.ts`
+- Main Backroad app pages:
+  - **Chat** (graph-driven answer)
+  - **Ingest** (upload + ingest + batch folder ingest)
+  - **Generate Config** (rules → JSON)
+- Contains runtime-safe fallback if Backroad API shape differs.
+
+### `src/mcp/ragMcpServer.ts`
+- Phase-2 placeholder for dedicated RAG MCP server.
+
+### `src/mcp/salesforceMcpServer.ts`
+- Phase-2 placeholder for dedicated Salesforce MCP server.
+
+### `tests/supervisor.test.ts`
+- Basic intent-routing unit tests.
+
+---
+
+## 5) Environment Variables (`.env.example`)
+
+```env
+INTERNAL_LLM_BASE_URL=https://your-internal-openai-compatible-endpoint
+INTERNAL_LLM_API_KEY=your-api-key
+INTERNAL_LLM_MODEL=chatgpt-oss
+EMBEDDING_TYPE=xenova
+XENOVA_MODEL=Xenova/all-MiniLM-L6-v2
+NOMIC_EMBEDDING_URL=https://your-internal-embedding-endpoint
+NOMIC_EMBEDDING_API_KEY=your-api-key
+VECTOR_DB_TYPE=chroma
+CHROMA_COLLECTION=agentic-rag
+CHROMA_URL=http://localhost:8000
+PGVECTOR_CONNECTION_STRING=postgresql://user:password@host.docker.internal:5432/ai
+VECTRA_INDEX_DIR=./vector-index
+DATA_DIR=./data
+PROCESSED_DIR=./data/processed
+MCP_PORT=3001
+BACKROAD_PORT=3000
+SALESFORCE_LOGIN_URL=https://login.salesforce.com
+SALESFORCE_CLIENT_ID=your-client-id
+SALESFORCE_CLIENT_SECRET=your-client-secret
+SALESFORCE_USERNAME=your-username
+SALESFORCE_PASSWORD=your-password
+SALESFORCE_SECURITY_TOKEN=your-token
+```
+
+---
+
+## 6) Setup
+
 ```bash
-npm install
+npm install --legacy-peer-deps
 cp .env.example .env
 ```
 
-For pgvector (if selected), ensure Postgres has extension:
+(Optional for pgvector)
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-## Vector DB & Embeddings Setup
-### Vector DB toggle
-Set in `.env`:
-- `VECTOR_DB_TYPE=chroma` (default)
-- `VECTOR_DB_TYPE=pgvector`
-- `VECTOR_DB_TYPE=vectra`
+---
 
-Current implementation:
-- `vectra` is fully wired.
-- `chroma` and `pgvector` adapters are scaffolded placeholders in `src/rag/vectorStoreFactory.ts` and currently fall back to vectra logic; swap in production clients there.
+## 7) How to Run
 
-### Embedding toggle
-Set in `.env`:
-- `EMBEDDING_TYPE=xenova` (default, local)
-- `EMBEDDING_TYPE=nomic` (remote/internal embedding API)
-
-Factory is in `src/rag/embeddingsFactory.ts`.
-
-## Running with Backroad
+### 7.1 Development (Backroad app)
 ```bash
 npm run dev
 ```
-Then open Backroad app URL (port from `BACKROAD_PORT`, default `3000`).
 
-UI pages:
-- Chat (agent-router flow)
-- Ingest (upload + ingest)
-- Generate Config
+### 7.2 Build + Start
+```bash
+npm run build
+npm start
+```
 
-## Ingestion Guide
-### UI ingestion
-Use Backroad **Ingest** page:
-- upload PDF/TXT/DOCX/XLS/XLSX
-- file is copied to `data/`
-- parsed, chunked, embedded, written to vector store
-- moved to `data/processed/`
-
-### CLI ingestion fallback
+### 7.3 Ingest via CLI
 ```bash
 npm run ingest
 ```
-Scans `data/`, ingests supported files, then moves them to `data/processed/`.
 
-## Usage Examples
-- **General chat**: “Summarize what you can help with.”
-- **Retrieval/policy**: “What is leave policy for probation employees?”
-- **Config generation**: “If score < 7 reject consumer, else accept. If attr3 = 7 flag Y.”
+### 7.4 Run tests
+```bash
+npm test
+```
 
-## Future Agents
-Placeholders are added:
-- `src/agents/reportGenerationAgent.ts`
-- `src/agents/incidentResolverAgent.ts`
+---
 
-Incident resolver note:
-- ingest incident history/resolutions/error catalogs (JSON/CSV) into vector store,
-- retrieve similar incidents during troubleshooting.
+## 8) Usage Behavior Examples
 
-## Extending with MCP servers
-Scaffold placeholders are in:
-- `src/mcp/ragMcpServer.ts`
-- `src/mcp/salesforceMcpServer.ts`
+### Example A: Policy question
+Input: `What is leave policy for probation employees?`
+- Routed to `retrieval`
+- Executes vector search + grounded answer with citations.
 
-Teams can own/deploy separate MCP services and expose tools to the supervisor graph.
+### Example B: General chat
+Input: `Can you summarize what this platform does?`
+- Routed to `chat`
+- Direct LLM answer.
 
-## Phases
-1. **Phase 1 (current)**: Core LangGraph + Backroad + ingestion + local vector fallback.
-2. **Phase 2**: Real Chroma/pgvector integrations and production MCP servers.
-3. **Phase 3**: Human-in-the-loop approvals, durable state persistence, enterprise observability.
+### Example C: Batch config generation
+Input: `If score < 7 reject consumer, else accept; if attr3 = 7 set flag Y`
+- Routed to `config`
+- Returns generated JSON-like configuration output.
+
+---
+
+## 9) Ingestion Details
+
+Supported formats:
+- `.pdf`, `.txt`, `.doc`, `.docx`, `.xls`, `.xlsx`
+
+Pipeline:
+1. Extract text
+2. Chunk text
+3. Embed chunks
+4. Upsert vectors
+5. Move file to `data/processed/`
+
+For future incident resolver:
+- Add incident knowledge files (e.g., CSV/JSON exports) into `data/`
+- Ingest to build historical incident retrieval base.
+
+---
+
+## 10) Extensibility & MCP Strategy
+
+- `src/mcp/*` placeholders define future team-owned MCP servers.
+- Recommended approach:
+  1. Expose each domain service as MCP server (RAG, Salesforce, Reporting).
+  2. Register tool contracts with versioned schemas.
+  3. Use supervisor graph for orchestration and policy controls.
+
+---
+
+## 11) Phased Delivery
+
+1. **Phase 1 (current):** LangGraph + Backroad + ingestion + vector fallback.
+2. **Phase 2:** Real Chroma/pgvector adapters + production MCP servers.
+3. **Phase 3:** HITL approvals, durable graph state/persistence, observability and guardrails.
